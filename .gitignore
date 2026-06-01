@@ -12,5 +12,6 @@ venv/
 .claude/
 .focus-explorer/
 .pycard/
+.aspect-slicer/
 .zookeep/
 zookeeper-report.json

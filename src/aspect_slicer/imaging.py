@@ -35,6 +35,12 @@ def default_centered_crop(image_width, image_height, ratio_width, ratio_height):
 
 
 def make_drag_crop(anchor_x, anchor_y, current_x, current_y, ratio_width, ratio_height, image_width, image_height):
+    """Create an aspect-correct drag rectangle.
+
+    The anchor is the user's chosen top-left source pixel. It is clamped to
+    image bounds but not snapped to the aspect-ratio grid; only width and
+    height are quantized to integer multiples of the requested ratio.
+    """
     anchor_x = max(0, min(int(anchor_x), image_width - 1))
     anchor_y = max(0, min(int(anchor_y), image_height - 1))
     current_x = max(anchor_x + 1, min(int(current_x), image_width))
@@ -123,4 +129,3 @@ def slice_design(execroot, design):
             image.crop(tuple(crop)).save(output, "PNG")
             written.append(output)
     return written
-

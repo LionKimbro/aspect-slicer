@@ -34,6 +34,13 @@ def test_drag_crop_contains_current_point_and_clamps_to_bounds():
     assert make_drag_crop(70, 50, 99, 99, 13, 19, 100, 100) == [70, 50, 96, 88]
 
 
+def test_drag_crop_does_not_aspect_quantize_top_left_anchor():
+    crop = make_drag_crop(23, 37, 90, 140, 17, 22, 200, 200)
+    assert crop[:2] == [23, 37]
+    assert (crop[2] - crop[0]) % 17 == 0
+    assert (crop[3] - crop[1]) % 22 == 0
+
+
 def test_project_create_import_slice_and_trash(tmp_path):
     ensure_project(tmp_path)
     data = read_core(tmp_path)

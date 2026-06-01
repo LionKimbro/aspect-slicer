@@ -46,6 +46,7 @@ g = {
     "dirty": False,
     "autosave-after-id": None,
     "sounds-enabled": True,
+    "quit-fn": None,
 }
 
 widgets = {}
@@ -58,10 +59,11 @@ def run(execroot):
     root.mainloop()
 
 
-def start_in_root(root, execroot, flags=""):
+def start_in_root(root, execroot, flags="", quit_fn=None):
     reset_ui_state()
     g["execroot"] = Path(execroot)
     g["sounds-enabled"] = "q" not in flags
+    g["quit-fn"] = quit_fn
     ensure_project(g["execroot"])
     g["data"] = read_core(g["execroot"])
     g["root"] = root
@@ -99,6 +101,7 @@ def reset_ui_state():
     g["dirty"] = False
     g["autosave-after-id"] = None
     g["sounds-enabled"] = True
+    g["quit-fn"] = None
 
 
 def play(event_name):
@@ -697,4 +700,8 @@ def close_master_window():
             commit_design_fields(state)
     save_now()
     play("program-close")
-    g["root"].destroy()
+    root = g["root"]
+    quit_fn = g.get("quit-fn")
+    root.destroy()
+    if quit_fn:
+        quit_fn()
