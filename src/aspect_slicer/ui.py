@@ -694,14 +694,31 @@ def close_design_window(design_uuid):
 
 
 def close_master_window():
+    if not g.get("root"):
+        return
     for design_uuid in list(design_windows.keys()):
         state = design_windows.get(design_uuid)
         if state:
             commit_design_fields(state)
+            try:
+                state["window"].destroy()
+            except tk.TclError:
+                pass
+            design_windows.pop(design_uuid, None)
+    if g.get("autosave-after-id"):
+        try:
+            g["root"].after_cancel(g["autosave-after-id"])
+        except tk.TclError:
+            pass
+        g["autosave-after-id"] = None
     save_now()
     play("program-close")
     root = g["root"]
     quit_fn = g.get("quit-fn")
-    root.destroy()
+    try:
+        root.destroy()
+    except tk.TclError:
+        pass
+    g["root"] = None
     if quit_fn:
         quit_fn()

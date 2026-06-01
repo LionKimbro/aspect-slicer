@@ -19,12 +19,31 @@ def register_tests():
     )
 
 
+def register_shutdown_tests():
+    harness.set_resetfn(ui.reset_ui_state)
+    harness.add_test(
+        "Master window close requests harness shutdown",
+        [
+            step_master_window_is_ready,
+            step_close_master_window,
+        ],
+        "q",
+    )
+
+
 def step_master_window_exists():
-    if "design-tree" not in ui.widgets:
-        return "wait", 20
+    result = step_master_window_is_ready()
+    if result[0] != "next":
+        return result
     tree = ui.widgets["design-tree"]
     if len(tree.get_children()) != 0:
         return "fail", "fresh project should start with no designs"
+    return "next", None
+
+
+def step_master_window_is_ready():
+    if "design-tree" not in ui.widgets:
+        return "wait", 20
     return "next", None
 
 
@@ -78,3 +97,9 @@ def step_audio_checkbox_persists_to_core_json():
         return "fail", "audio checkbox did not persist false to core.json"
     return "success", None
 
+
+def step_close_master_window():
+    ui.close_master_window()
+    if not harness.g["exit_requested"]:
+        return "fail", "closing master window did not request harness exit"
+    return "success", None
