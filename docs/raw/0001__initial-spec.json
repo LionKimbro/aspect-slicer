@@ -1,0 +1,1189 @@
+{
+  "document": {
+    "document-id": "aspect-slicer.software-specification.v1",
+    "title": "Aspect Slicer Software Specification",
+    "type": "software-specification",
+    "tags": [
+      "aspect-slicer",
+      "software",
+      "tkinter",
+      "image-processing",
+      "print-workflow",
+      "robert",
+      "specification"
+    ],
+    "purpose": "Specify the Aspect Slicer application: a simple Tkinter-based tool for managing print designs, importing source images, defining exact aspect-ratio crop regions, and exporting PNG slices for Robert's print workflow.",
+    "author": [
+      "Lion Kimbro",
+      "Wing-Cat (Chat-GPT)"
+    ],
+    "status": "draft",
+    "created": "2026-05-31"
+  },
+  "project": {
+    "name": "aspect-slicer",
+    "command-name": "aspect-slicer",
+    "title": "Aspect Slicer",
+    "purpose": "A simple Tkinter-based production tool for Robert to manage print designs, import source images, define exact-aspect-ratio crop rectangles, and export PNG slices for common print sizes.",
+    "primary-user": "Robert",
+    "project-folder": ".aspect-slicer",
+    "project-folder-owner": "lionscliapp",
+    "description": "Robert starts from sticker-like source art, typically a 2:3 image, and needs to produce cropped print images for 8.5x11, 11x17, and 13x19 print formats. The app stores designs, series, imported source images, crop coordinates, and output slices in a simple local folder structure.",
+    "scope": {
+      "v1": [
+        "Simple Tkinter application.",
+        "Main designs window with a single-select tree listing designs.",
+        "Design window for editing design metadata, importing a source image, defining crop rectangles, and exporting slices.",
+        "Dictionary-based data model serialized to JSON.",
+        "No object-oriented architecture.",
+        "No full CIRA architecture.",
+        "No undo or redo.",
+        "No M1 dependency, though data should be shaped in an M1-compatible style where reasonable.",
+        "No full series management window in v1.",
+        "Sound feedback is specified but not required for v1 implementation."
+      ],
+      "future": [
+        "Possible M1 attachment.",
+        "Series management window.",
+        "More advanced crop editing.",
+        "Adjustable canvas image display size.",
+        "More complete sound engine."
+      ]
+    },
+    "technologies": {
+      "language": "Python",
+      "gui": "Tkinter",
+      "image-processing": "Pillow",
+      "sound": "winsound.Beep planned/specification only for v1",
+      "data-storage": "JSON",
+      "filesystem": "local project folder",
+      "platform": "Windows-first",
+      "support-libraries": [
+        "lionscliapp",
+        "tkintertester"
+      ]
+    },
+    "dependencies": {
+      "required": [
+        "Python",
+        "Tkinter",
+        "Pillow",
+        "lionscliapp",
+        "tkintertester"
+      ],
+      "optional-or-future": [
+        "winsound"
+      ]
+    }
+  },
+  "coding-style": {
+    "architecture": "functions-plus-dictionaries",
+    "avoid": [
+      "object-oriented-programming",
+      "classes-for-domain-model",
+      "undo-redo-framework",
+      "full-CIRA-architecture",
+      "new-multi-window-framework"
+    ],
+    "data-objects": "plain dictionaries",
+    "top-level-state": "plain dictionaries and module-level functions are acceptable",
+    "keys": {
+      "style": "skewer-case",
+      "examples": [
+        "uuid",
+        "name",
+        "title",
+        "series-name",
+        "series-uuid",
+        "created-date",
+        "source-file-path",
+        "image-hash",
+        "crop-8-5x11"
+      ]
+    },
+    "uuid-language": {
+      "canonical-term": "uuid",
+      "note": "If older notes or spoken dictation say GUID, treat it silently as UUID."
+    },
+    "identifier-rules": {
+      "applies-to": [
+        "design names",
+        "series names",
+        "tags"
+      ],
+      "allowed": [
+        "lowercase letters a-z",
+        "digits 0-9",
+        "underscore"
+      ],
+      "forbidden": [
+        "uppercase letters",
+        "whitespace",
+        "hyphens",
+        "punctuation",
+        "slashes",
+        "backslashes"
+      ],
+      "regular-expression": "^[a-z0-9_]+$",
+      "normalization": {
+        "enabled": true,
+        "description": "When converting human text to identifiers, lowercase the text, replace runs of invalid characters with underscores, collapse repeated underscores, and strip leading/trailing underscores.",
+        "examples": {
+          "Cool Print 7": "cool_print_7",
+          "Cool-Print #7!!": "cool_print_7",
+          "   Dragon Poster ": "dragon_poster",
+          "Robert's Best One": "robert_s_best_one"
+        }
+      }
+    },
+    "title-rules": {
+      "description": "Titles are for human expression and may contain almost any character. Titles do not need to be machine-safe."
+    },
+    "tags": {
+      "storage": "list of strings",
+      "input-style": "whitespace-delimited text entry",
+      "rules": "same as identifiers",
+      "normalization": "normalize each token using the identifier normalizer"
+    }
+  },
+  "conventions": {
+    "aspect-ratios": {
+      "8_5x11": {
+        "display-label": "8.5 x 11",
+        "filename-token": "8_5x11",
+        "integer-ratio-width": 17,
+        "integer-ratio-height": 22,
+        "note": "8.5x11 is internally represented as 17:22 to avoid fractional pixels."
+      },
+      "11x17": {
+        "display-label": "11 x 17",
+        "filename-token": "11x17",
+        "integer-ratio-width": 11,
+        "integer-ratio-height": 17
+      },
+      "13x19": {
+        "display-label": "13 x 19",
+        "filename-token": "13x19",
+        "integer-ratio-width": 13,
+        "integer-ratio-height": 19
+      }
+    },
+    "crop-rectangle-format": {
+      "format": "[x0, y0, x1, y1]",
+      "coordinate-space": "source image pixels",
+      "top-left": "inclusive",
+      "bottom-right": "exclusive",
+      "width-formula": "x1 - x0",
+      "height-formula": "y1 - y0",
+      "example": [
+        0,
+        0,
+        1000,
+        1294
+      ],
+      "pillow-compatible": true
+    },
+    "image-import": {
+      "typical-source-dimensions": {
+        "width": 1696,
+        "height": 2528
+      },
+      "exceptions-expected": true,
+      "preserve-original-format": true,
+      "supported-input-formats": [
+        "jpeg",
+        "jpg",
+        "png",
+        "webp if supported by the installed Pillow/Tkinter environment"
+      ],
+      "managed-image-filename-rules": {
+        "jpeg": "image.jpeg",
+        "jpg": "image.jpeg",
+        "png": "image.png",
+        "webp": "image.webp"
+      },
+      "hash": {
+        "algorithm": "sha256",
+        "hash-file-bytes": true,
+        "note": "Hash the imported image file bytes."
+      }
+    },
+    "canvas-display": {
+      "display-image-height": 632,
+      "preserve-aspect-ratio": true,
+      "typical-display-width-for-1696x2528": 424,
+      "note": "For v1, always display the source image at height 632 regardless of original size. This may change in the future."
+    },
+    "slice-output": {
+      "format": "png",
+      "dpi": "ignored",
+      "pixel-dimensions": "Use selected source-image pixel crop dimensions exactly.",
+      "filenames": [
+        "<design-name>_8_5x11.png",
+        "<design-name>_11x17.png",
+        "<design-name>_13x19.png"
+      ]
+    }
+  },
+  "data-model": {
+    "core-json": {
+      "path": ".aspect-slicer/core.json",
+      "top-level-shape": {
+        "config": {},
+        "designs": {},
+        "series": {}
+      },
+      "example": {
+        "config": {
+          "audio": true
+        },
+        "designs": {
+          "<uuid>": {
+            "uuid": "<uuid>",
+            "name": "cool_print_7",
+            "name-locked": true,
+            "title": "Cool Print 7",
+            "tags": [
+              "cool",
+              "print",
+              "7"
+            ],
+            "series-uuid": "<series-uuid-or-empty-string>",
+            "created-date": "2026-05-31",
+            "source-file-path": "C:/Users/Robert/Desktop/Cool Print 7.png",
+            "image-file": "image.png",
+            "image-hash": "<sha256>",
+            "image-width": 1696,
+            "image-height": 2528,
+            "crop-8-5x11": [
+              0,
+              0,
+              1696,
+              2194
+            ],
+            "crop-11x17": [
+              29,
+              0,
+              1667,
+              2528
+            ],
+            "crop-13x19": [
+              0,
+              23,
+              1696,
+              2501
+            ]
+          }
+        },
+        "series": {
+          "<uuid>": {
+            "uuid": "<uuid>",
+            "name": "summer_dragons",
+            "title": "Summer Dragons",
+            "tags": [
+              "summer",
+              "dragons"
+            ],
+            "created-date": "2026-05-31"
+          }
+        }
+      }
+    },
+    "design": {
+      "required-fields": {
+        "uuid": "string UUID",
+        "name": "string identifier, blank until locked",
+        "name-locked": "boolean",
+        "title": "string",
+        "tags": "list of identifier strings",
+        "series-uuid": "string UUID or empty string",
+        "created-date": "YYYY-MM-DD string",
+        "source-file-path": "string original external path or empty string",
+        "image-file": "managed imported image filename or empty string",
+        "image-hash": "sha256 string or empty string",
+        "image-width": "integer or null",
+        "image-height": "integer or null",
+        "crop-8-5x11": "null or [x0, y0, x1, y1]",
+        "crop-11x17": "null or [x0, y0, x1, y1]",
+        "crop-13x19": "null or [x0, y0, x1, y1]"
+      },
+      "new-design-defaults": {
+        "uuid": "generated UUID",
+        "name": "",
+        "name-locked": false,
+        "title": "",
+        "tags": [],
+        "series-uuid": "",
+        "created-date": "today as YYYY-MM-DD",
+        "source-file-path": "",
+        "image-file": "",
+        "image-hash": "",
+        "image-width": null,
+        "image-height": null,
+        "crop-8-5x11": null,
+        "crop-11x17": null,
+        "crop-13x19": null
+      }
+    },
+    "series": {
+      "required-fields": {
+        "uuid": "string UUID",
+        "name": "string identifier",
+        "title": "string",
+        "tags": "list of identifier strings",
+        "created-date": "YYYY-MM-DD string"
+      },
+      "new-series-defaults": {
+        "uuid": "generated UUID",
+        "name": "normalized typed series name",
+        "title": "human-readable title derived from typed input if needed",
+        "tags": [],
+        "created-date": "today as YYYY-MM-DD"
+      },
+      "selection-rule": "Designs store series-uuid. UI allows user to select or type series by name, and the app resolves that name to the series UUID."
+    },
+    "config": {
+      "audio": {
+        "type": "boolean",
+        "default": true,
+        "description": "Master enable/disable for event sounds."
+      }
+    }
+  },
+  "folders-layout": {
+    "root": ".aspect-slicer/",
+    "tree": {
+      ".aspect-slicer/core.json": "Main serialized app data.",
+      ".aspect-slicer/designs/": "Active design folders.",
+      ".aspect-slicer/designs/<uuid>/": "Folder for a single active design.",
+      ".aspect-slicer/designs/<uuid>/image.jpeg": "Imported source image if JPEG/JPG.",
+      ".aspect-slicer/designs/<uuid>/image.png": "Imported source image if PNG.",
+      ".aspect-slicer/designs/<uuid>/image.webp": "Imported source image if WEBP supported.",
+      ".aspect-slicer/designs/<uuid>/slices/": "Output slices for the design.",
+      ".aspect-slicer/designs/<uuid>/slices/<design-name>_8_5x11.png": "8.5x11 slice output.",
+      ".aspect-slicer/designs/<uuid>/slices/<design-name>_11x17.png": "11x17 slice output.",
+      ".aspect-slicer/designs/<uuid>/slices/<design-name>*13x19.png": "13x19 slice output.",
+      ".aspect-slicer/trash/": "Trash area for deleted design folders.",
+      ".aspect-slicer/trash/<uuid>/": "Former design folder after deletion.",
+      ".aspect-slicer/trash/<uuid>/design.json": "Snapshot of design dictionary at deletion time."
+    },
+    "creation-rules": {
+      "on-app-start": [
+        "Ensure .aspect-slicer/ exists.",
+        "Ensure .aspect-slicer/core.json exists or create it.",
+        "Ensure .aspect-slicer/designs/ exists.",
+        "Ensure .aspect-slicer/trash/ exists."
+      ],
+      "on-design-create": [
+        "Create design dictionary.",
+        "Create .aspect-slicer/designs/<uuid>/.",
+        "Create .aspect-slicer/designs/<uuid>/slices/ immediately.",
+        "Add design dictionary to core.json designs map.",
+        "Save core.json."
+      ],
+      "on-delete-design": [
+        "Confirm deletion with user.",
+        "Write design dictionary to .aspect-slicer/designs/<uuid>/design.json or directly into trash destination as design.json.",
+        "Move .aspect-slicer/designs/<uuid>/ to .aspect-slicer/trash/<uuid>/.",
+        "If trash/<uuid>/ already exists, choose a non-conflicting trash folder name.",
+        "Remove design from core.json designs map.",
+        "Save core.json."
+      ]
+    }
+  },
+  "master-window": {
+    "title": "Aspect Slicer",
+    "role": "Central designs window.",
+    "startup": {
+      "behavior": [
+        "Initialize project folder through lionscliapp.",
+        "Load or create core.json.",
+        "Show all designs in single-select Tkinter tree.",
+        "Play startup sound if sound is implemented and enabled."
+      ]
+    },
+    "widgets": {
+      "design-tree": {
+        "type": "Tkinter Treeview or project-standard Tkinter tree control",
+        "selection": "single",
+        "columns": [
+          "name",
+          "title",
+          "series-name",
+          "created-date"
+        ],
+        "display-rules": {
+          "name": "If design name is blank, show <unnamed a8c3>, where a8c3 is the first four characters of the UUID.",
+          "title": "Show title as-is.",
+          "series-name": "Resolve series-uuid to series name. If no series, show blank.",
+          "created-date": "Show YYYY-MM-DD."
+        },
+        "double-click": "Open selected design window."
+      },
+      "create-new-design-button": {
+        "label": "Create New Design",
+        "behavior": [
+          "Create new design dictionary.",
+          "Create folder structure for the design.",
+          "Add design to core data.",
+          "Save immediately.",
+          "Open design window.",
+          "Focus should begin in the large Title entry."
+        ]
+      },
+      "delete-design-button": {
+        "label": "Delete Design",
+        "behavior": [
+          "Require selected design.",
+          "Ask for confirmation.",
+          "Move design folder to trash.",
+          "Write design.json snapshot into trashed folder.",
+          "Remove design from active core designs.",
+          "Save immediately.",
+          "Refresh design tree.",
+          "Play delete sound if implemented and enabled."
+        ]
+      },
+      "audio-checkbox": {
+        "label": "audio",
+        "type": "checkbox",
+        "bound-to": "core.config.audio",
+        "behavior": [
+          "When checked, event sounds are enabled.",
+          "When unchecked, event sounds are disabled.",
+          "Changing checkbox marks core dirty and should save."
+        ]
+      },
+      "status-bar": {
+        "position": "bottom",
+        "elements": [
+          "dirty/saved indicator"
+        ],
+        "dirty-indicator": {
+          "saved": {
+            "color": "green",
+            "text": "Saved"
+          },
+          "dirty": {
+            "color": "red",
+            "text": "Unsaved"
+          }
+        }
+      }
+    },
+    "close-behavior": [
+      "Commit pending field values from open windows if practical.",
+      "Autosave if dirty.",
+      "Play shutdown sound if implemented and enabled.",
+      "Close application."
+    ]
+  },
+  "design-window": {
+    "title-format": "Design: <title-or-name-or-unnamed>",
+    "layout": {
+      "primary-orientation": "left metadata/action panel and right crop canvas panel",
+      "left-side": "metadata, source image, import/open controls, slicing controls",
+      "right-side": "canvas image view and crop mode buttons"
+    },
+    "open-behavior": [
+      "Play open-design sound if implemented and enabled.",
+      "Load design dictionary by UUID.",
+      "Ensure design folder and slices folder exist.",
+      "If imported image exists, load it and display it scaled to height 632.",
+      "Draw crop rectangles according to current crop mode."
+    ],
+    "left-side": {
+      "title-field": {
+        "label": "Design:",
+        "type": "large Entry",
+        "font": "large",
+        "bound-to": "design.title",
+        "focus": "For newly created designs, initial focus starts here.",
+        "behavior": [
+          "User can type any human-readable title.",
+          "While name is not locked, changing title auto-populates or updates the proposed name field using identifier normalization.",
+          "Field changes mark dirty on focus-out or suitable field-change event."
+        ]
+      },
+      "name-field": {
+        "label": "Name:",
+        "unlocked-state": {
+          "widgets": [
+            "Entry",
+            "Lock Name button"
+          ],
+          "entry-bound-to": "design.name",
+          "behavior": [
+            "Starts blank for new designs.",
+            "Auto-filled from normalized title while unlocked.",
+            "User may edit before locking.",
+            "Lock Name validates and normalizes the name.",
+            "Lock Name requires non-empty unique valid identifier.",
+            "After successful lock, set design.name-locked to true and save immediately."
+          ]
+        },
+        "locked-state": {
+          "widgets": [
+            "Label only"
+          ],
+          "behavior": [
+            "Show locked name as text.",
+            "Do not show Entry.",
+            "Do not show Lock Name button.",
+            "Do not allow casual editing."
+          ]
+        },
+        "validation": [
+          "Must match ^[a-z0-9*]+$ after normalization.",
+          "Must be unique among all design names.",
+          "Must not be blank."
+        ],
+        "workflow-guard": {
+          "until-name-locked": [
+            "Disable Browse/import image.",
+            "Disable Slice.",
+            "Disable crop editing.",
+            "Disable View Slices unless the design somehow already has slices.",
+            "Show gentle message such as: Choose and lock a design name before importing an image."
+          ]
+        }
+      },
+      "created-field": {
+        "label": "Created:",
+        "type": "Label",
+        "bound-to": "design.created-date",
+        "editable": false,
+        "format": "YYYY-MM-DD"
+      },
+      "tags-field": {
+        "label": "Tags:",
+        "type": "Entry",
+        "input": "whitespace-delimited tags",
+        "bound-to": "design.tags",
+        "behavior": [
+          "Normalize tokens on focus-out.",
+          "Store as list of identifier strings.",
+          "Mark dirty on change."
+        ]
+      },
+      "series-field": {
+        "label": "Series:",
+        "preferred-widget": "Combobox with editable text",
+        "behavior": [
+          "List known series names.",
+          "Allow blank/no-series selection.",
+          "Allow user to type a new series name.",
+          "Resolve existing series name to series UUID.",
+          "If typed series name is not recognized, enable or visually highlight Create Series button.",
+          "When Create Series is clicked, create new series dictionary and set design.series-uuid to that new UUID."
+        ],
+        "create-series-button": {
+          "label": "Create Series",
+          "enabled-when": "Typed normalized series name is non-empty and does not match existing series.",
+          "behavior": [
+            "Create series with generated UUID.",
+            "Set series.name to normalized typed name.",
+            "Set series.title to human-readable typed text if available.",
+            "Set created-date to today.",
+            "Add to core.series.",
+            "Set current design.series-uuid to new series UUID.",
+            "Save immediately."
+          ]
+        }
+      },
+      "source-image-section": {
+        "spacing-before": true,
+        "source-file-path": {
+          "label": "Source Image:",
+          "type": "Entry or Label",
+          "bound-to": "design.source-file-path",
+          "description": "Original external source path selected by Browse.",
+          "editable": false
+        },
+        "browse-button": {
+          "label": "Browse",
+          "enabled-when": "design.name-locked is true",
+          "behavior": [
+            "Open file picker.",
+            "User selects image file.",
+            "Immediately import the selected image.",
+            "Copy file into .aspect-slicer/designs/<uuid>/ as image.jpeg, image.png, or image.webp depending on source format.",
+            "Set design.source-file-path to original external path.",
+            "Set design.image-file to managed image filename.",
+            "Calculate SHA256 hash of imported image bytes.",
+            "Store image width and height.",
+            "Replace old imported image if one exists.",
+            "Clear existing crop rectangles.",
+            "Create centered maximum default crops for supported aspect ratios.",
+            "Display imported image on canvas at height 632.",
+            "Save immediately."
+          ]
+        },
+        "containing-button": {
+          "label": "Containing",
+          "enabled-when": "design.source-file-path is non-empty",
+          "behavior": [
+            "Open containing folder of original source image using Windows default file explorer behavior."
+          ]
+        },
+        "open-button": {
+          "label": "Open",
+          "enabled-when": "design.source-file-path is non-empty",
+          "behavior": [
+            "Open original source image file using Windows default application behavior."
+          ]
+        },
+        "image-hash": {
+          "label": "Image Hash:",
+          "type": "Label",
+          "bound-to": "design.image-hash",
+          "display-when-empty": "not loaded yet"
+        }
+      },
+      "slice-actions": {
+        "buttons": {
+          "slice": {
+            "label": "Slice",
+            "enabled-when": "design.name-locked is true and imported image exists and at least one crop rectangle exists",
+            "behavior": [
+              "For each crop rectangle that exists, crop from imported source image using Pillow.",
+              "Save output PNG into .aspect-slicer/designs/<uuid>/slices/.",
+              "Use exact filenames: <design-name>_8_5x11.png, <design-name>_11x17.png, <design-name>_13x19.png.",
+              "Only output slices for crop rectangles that exist.",
+              "Do not require all three crop rectangles.",
+              "Use source image pixel coordinates exactly.",
+              "Ignore DPI.",
+              "Save immediately after successful slicing.",
+              "Refresh View Slices button enabled state."
+            ]
+          },
+          "view-slices": {
+            "label": "View Slices",
+            "enabled-when": "slices folder contains at least one file",
+            "behavior": [
+              "Open .aspect-slicer/designs/<uuid>/slices/ in Windows file explorer."
+            ],
+            "note": "The slices folder itself is created when the design is created, but this button should not light up until the folder has at least one file."
+          }
+        }
+      }
+    },
+    "right-side": {
+      "canvas": {
+        "type": "Tkinter Canvas",
+        "role": "Display imported image and crop rectangles.",
+        "image-display": {
+          "height": 632,
+          "preserve-aspect-ratio": true,
+          "image-item": "single Tk image canvas item",
+          "note": "Keep a Python reference to PhotoImage so Tkinter does not garbage collect it."
+        },
+        "crop-rectangle-items": {
+          "description": "Rectangles are named/tagged canvas items representing crop regions.",
+          "tags": {
+            "8_5x11": "crop-8-5x11",
+            "11x17": "crop-11x17",
+            "13x19": "crop-13x19"
+          },
+          "coordinate-mapping": [
+            "Stored crop coordinates are source image pixels.",
+            "Canvas rectangles are display-scaled versions of stored source coordinates.",
+            "On mouse input, convert canvas coordinates back to source image coordinates."
+          ]
+        },
+        "mouse-behavior": {
+          "all-mode": [
+            "Show all existing crop rectangles.",
+            "Do not allow drawing new crop in All mode unless explicitly changed later."
+          ],
+          "single-crop-mode": [
+            "Show and edit only selected crop rectangle.",
+            "Mouse down starts defining crop rectangle from top-left point.",
+            "Mouse drag updates rectangle live.",
+            "Mouse release finalizes crop rectangle.",
+            "On mouse release, compute valid aspect-ratio-correct rectangle in source pixels.",
+            "Store [x0, y0, x1, y1].",
+            "Mark dirty and save immediately.",
+            "Play crop-complete sound if implemented and enabled."
+          ],
+          "aspect-ratio-rule": [
+            "The displayed rectangle must be exactly aspect-ratio correct.",
+            "The final source-pixel rectangle must have integer width and height matching the selected ratio.",
+            "For 11x17, width = 11 * n and height = 17 * n.",
+            "For 13x19, width = 13 * n and height = 19 * n.",
+            "For 8.5x11, width = 17 * n and height = 22 * n.",
+            "While dragging, choose the minimal valid rectangle that contains the current mouse position."
+          ],
+          "bounds-rule": [
+            "Crop rectangle must stay within source image bounds.",
+            "If drag would exceed image bounds, clamp to maximum valid rectangle within image.",
+            "If drag is too small to create at least n=1, do not commit or commit the smallest valid rectangle only if practical."
+          ]
+        }
+      },
+      "mode-buttons": {
+        "position": "below canvas",
+        "buttons": [
+          {
+            "label": "All",
+            "mode": "all",
+            "behavior": "Show all three crop rectangles."
+          },
+          {
+            "label": "8.5 x 11",
+            "mode": "8_5x11",
+            "crop-key": "crop-8-5x11",
+            "behavior": "Show/edit only the 8.5x11 crop rectangle."
+          },
+          {
+            "label": "11 x 17",
+            "mode": "11x17",
+            "crop-key": "crop-11x17",
+            "behavior": "Show/edit only the 11x17 crop rectangle."
+          },
+          {
+            "label": "13 x 19",
+            "mode": "13x19",
+            "crop-key": "crop-13x19",
+            "behavior": "Show/edit only the 13x19 crop rectangle."
+          }
+        ]
+      }
+    },
+    "status-bar": {
+      "position": "bottom",
+      "elements": [
+        "dirty/saved indicator",
+        "short status message"
+      ],
+      "dirty-indicator": {
+        "saved": {
+          "color": "green",
+          "text": "Saved"
+        },
+        "dirty": {
+          "color": "red",
+          "text": "Unsaved"
+        }
+      }
+    },
+    "close-behavior": [
+      "Commit focus-field values.",
+      "Save if dirty.",
+      "Play window-close sound if implemented and enabled.",
+      "Close design window."
+    ]
+  },
+  "image-and-crop-algorithms": {
+    "default-centered-maximum-crop": {
+      "description": "When an image is imported, compute default centered maximum crop rectangles for all three aspect ratios.",
+      "inputs": [
+        "image-width",
+        "image-height",
+        "ratio-width",
+        "ratio-height"
+      ],
+      "rule": [
+        "Find the largest rectangle of the requested aspect ratio that fits inside the image.",
+        "Use integer multiples of the aspect ratio.",
+        "Center the rectangle in the source image.",
+        "Store as [x0, y0, x1, y1] with x1/y1 exclusive."
+      ],
+      "pseudo": [
+        "n = min(image_width // ratio_width, image_height // ratio_height)",
+        "crop_width = ratio_width * n",
+        "crop_height = ratio_height * n",
+        "x0 = (image_width - crop_width) // 2",
+        "y0 = (image_height - crop_height) // 2",
+        "x1 = x0 + crop_width",
+        "y1 = y0 + crop_height"
+      ]
+    },
+    "drag-to-crop": {
+      "description": "During crop dragging, choose the smallest valid aspect-ratio rectangle from the mouse-down point that contains the current mouse position.",
+      "inputs": [
+        "anchor source x",
+        "anchor source y",
+        "current source x",
+        "current source y",
+        "ratio width",
+        "ratio height"
+      ],
+      "rule": [
+        "Assume anchor is the top-left point.",
+        "Compute required width and height to contain the current mouse position.",
+        "Find n such that ratio_width*n >= required_width and ratio_height*n >= required_height.",
+        "Use the smallest such n.",
+        "Clamp to image bounds if necessary.",
+        "Store final rectangle on mouse release."
+      ]
+    },
+    "slicing": {
+      "description": "Slice selected crops from imported source image.",
+      "library": "Pillow",
+      "behavior": [
+        "Open managed imported image file from design folder.",
+        "For each non-null crop rectangle, call image.crop((x0, y0, x1, y1)).",
+        "Save each output as PNG in slices folder.",
+        "Use exact output filename convention."
+      ]
+    }
+  },
+  "save-behavior": {
+    "style": "autosave with dirty flag, no explicit Save button",
+    "dirty-flag": {
+      "description": "Any meaningful unsaved change marks the app dirty.",
+      "visual-indicator": "red Unsaved indicator in status bar",
+      "saved-indicator": "green Saved indicator in status bar"
+    },
+    "autosave": {
+      "interval-ms": 5000,
+      "behavior": [
+        "Every 5 seconds, if dirty, write core.json.",
+        "Use atomic write pattern: write core.json.tmp then replace core.json using os.replace.",
+        "After successful save, clear dirty flag and update indicator."
+      ]
+    },
+    "immediate-save-events": [
+      "Create new design",
+      "Lock design name",
+      "Import image",
+      "Create series",
+      "Delete design",
+      "Complete crop rectangle on mouse release",
+      "Complete slicing",
+      "Change audio checkbox",
+      "Close design window",
+      "Close application"
+    ],
+    "field-commit-events": [
+      "focus-out",
+      "Enter key where appropriate",
+      "explicit action buttons"
+    ],
+    "notes": [
+      "During live crop dragging, do not mark dirty until the rectangle is fully specified on mouse release.",
+      "Design field edits may mark dirty on focus-out or field-change depending on implementation simplicity."
+    ]
+  },
+  "sounds-feedback": {
+    "implementation-status": "specified but not required for v1",
+    "master-enabled-flag": "core.config.audio",
+    "implementation-approach": {
+      "preferred": "winsound.Beep",
+      "reason": "Simple Windows-first audible feedback without requiring bundled sound files.",
+      "helper-function": "play_event_pattern(event_name, state)",
+      "state": {
+        "enabled": "boolean from core.config.audio"
+      }
+    },
+    "events": {
+      "program-start": {
+        "description": "Announces that the program has started.",
+        "mnemonic": "dit-dit-dit",
+        "pattern": [
+          [
+            "tone",
+            880,
+            80
+          ],
+          [
+            "gap",
+            0,
+            60
+          ],
+          [
+            "tone",
+            1040,
+            80
+          ],
+          [
+            "gap",
+            0,
+            60
+          ],
+          [
+            "tone",
+            1240,
+            80
+          ]
+        ]
+      },
+      "program-close": {
+        "description": "Signs off when the application closes.",
+        "mnemonic": "dat-dat-dat",
+        "pattern": [
+          [
+            "tone",
+            660,
+            90
+          ],
+          [
+            "gap",
+            0,
+            70
+          ],
+          [
+            "tone",
+            520,
+            90
+          ],
+          [
+            "gap",
+            0,
+            70
+          ],
+          [
+            "tone",
+            440,
+            120
+          ]
+        ]
+      },
+      "open-design": {
+        "description": "Played when a design window opens.",
+        "mnemonic": "boop or bup",
+        "pattern": [
+          [
+            "tone",
+            620,
+            80
+          ]
+        ]
+      },
+      "crop-start": {
+        "description": "Played when user starts specifying a crop region.",
+        "mnemonic": "dah-dah-dah",
+        "pattern": [
+          [
+            "tone",
+            420,
+            70
+          ],
+          [
+            "gap",
+            0,
+            50
+          ],
+          [
+            "tone",
+            420,
+            70
+          ],
+          [
+            "gap",
+            0,
+            50
+          ],
+          [
+            "tone",
+            420,
+            70
+          ]
+        ]
+      },
+      "crop-complete": {
+        "description": "Played when crop region is completed and accepted.",
+        "mnemonic": "dut-dut",
+        "pattern": [
+          [
+            "tone",
+            880,
+            70
+          ],
+          [
+            "gap",
+            0,
+            50
+          ],
+          [
+            "tone",
+            1040,
+            70
+          ]
+        ]
+      },
+      "delete-design": {
+        "description": "Played when a design is deleted/moved to trash.",
+        "mnemonic": "soft scrub",
+        "pattern": [
+          [
+            "tone",
+            260,
+            30
+          ],
+          [
+            "gap",
+            0,
+            20
+          ],
+          [
+            "tone",
+            240,
+            30
+          ],
+          [
+            "gap",
+            0,
+            20
+          ],
+          [
+            "tone",
+            220,
+            30
+          ],
+          [
+            "gap",
+            0,
+            20
+          ],
+          [
+            "tone",
+            200,
+            40
+          ]
+        ],
+        "note": "winsound.Beep cannot make true white noise. This descending soft scrub is a placeholder."
+      },
+      "window-close": {
+        "description": "Played when a design window closes.",
+        "mnemonic": "do-doot",
+        "pattern": [
+          [
+            "tone",
+            560,
+            70
+          ],
+          [
+            "gap",
+            0,
+            50
+          ],
+          [
+            "tone",
+            760,
+            100
+          ]
+        ]
+      }
+    },
+    "process-notes": [
+      "Keep sounds short and non-harsh.",
+      "Sounds should confirm state transitions, not distract.",
+      "Audio checkbox in master window disables all sounds.",
+      "Sound behavior should be centralized in one or two helper functions.",
+      "If winsound is unavailable, sound helpers should silently do nothing.",
+      "For v1, it is acceptable to specify this and leave implementation out."
+    ],
+    "example-inspired-shape": {
+      "function-name": "play_event_pattern",
+      "description": "Play a one-shot event pattern if audio is enabled.",
+      "segments": [
+        "tone: call winsound.Beep(frequency, duration_ms)",
+        "gap: sleep for duration_ms"
+      ],
+      "return-value": "For simple v1 or v1.1, return None or boolean success. Interruptible audio is not required."
+    }
+  },
+  "validation-and-user-protection": {
+    "name-locking": {
+      "reason": "The design name determines output filenames. It should not casually change after work begins.",
+      "rules": [
+        "New designs start with blank name and name-locked false.",
+        "Title editing proposes a normalized name.",
+        "Before image import or crop work, name must be locked.",
+        "After locking, name appears as a Label, not an Entry.",
+        "No Lock Name button appears once locked."
+      ]
+    },
+    "disabled-controls-before-name-lock": [
+      "Browse",
+      "Slice",
+      "Crop editing"
+    ],
+    "delete-safety": [
+      "Always confirm delete.",
+      "Move design folder to trash instead of deleting permanently.",
+      "Write design.json snapshot of design metadata in trash folder."
+    ],
+    "slice-safety": [
+      "Slice only existing crop rectangles.",
+      "Do not require all three crop rectangles.",
+      "Do not silently invent crops at slice time except default crops created at image import."
+    ],
+    "image-replacement": [
+      "If Browse imports a new image over an existing one, replace the managed image.",
+      "Clear existing crop rectangles.",
+      "Compute new centered maximum default crops.",
+      "Update image hash and dimensions.",
+      "Save immediately."
+    ]
+  },
+  "process-notes": {
+    "implementation-order": [
+      "Create project skeleton and command entry point aspect-slicer.",
+      "Use lionscliapp to establish .aspect-slicer project folder.",
+      "Implement core.json load/create/save with atomic save.",
+      "Implement dictionary constructors for new design and new series.",
+      "Implement folder creation rules.",
+      "Implement master designs window with tree, create, delete, audio checkbox, and status indicator.",
+      "Implement design window metadata fields.",
+      "Implement title-to-name normalization while name is unlocked.",
+      "Implement Lock Name behavior.",
+      "Implement Browse/import image using Pillow and shutil.",
+      "Implement canvas image display scaled to height 632.",
+      "Implement default centered maximum crop calculation.",
+      "Implement crop mode buttons and rectangle drawing.",
+      "Implement mouse drag crop editing.",
+      "Implement Slice with Pillow crop and PNG output.",
+      "Implement View Slices folder opening.",
+      "Implement autosave dirty flag.",
+      "Optionally implement sound helper and event calls after v1 basics work.",
+      "Write tkintertester tests where practical."
+    ],
+    "testing-notes": [
+      "Test creation of .aspect-slicer folder from empty state.",
+      "Test core.json creation from empty state.",
+      "Test creating a design creates design folder and slices folder.",
+      "Test title normalization: Cool Print 7 becomes cool_print_7.",
+      "Test Lock Name rejects blank names.",
+      "Test Lock Name rejects duplicate names.",
+      "Test image import preserves extension and computes hash.",
+      "Test image replacement clears old crop rectangles and creates new default crops.",
+      "Test crop rectangle math for 17:22, 11:17, and 13:19.",
+      "Test slicing one crop only.",
+      "Test slicing all three crops.",
+      "Test View Slices enabled only after at least one output exists.",
+      "Test delete moves folder to trash and writes design.json.",
+      "Test autosave writes core.json and clears dirty flag.",
+      "Test audio checkbox updates config.audio."
+    ],
+    "known-non-goals-for-v1": [
+      "No undo/redo.",
+      "No full CIRA model history.",
+      "No series management window.",
+      "No DPI or print-resolution management.",
+      "No advanced image zoom/pan.",
+      "No arbitrary manual file organization.",
+      "No object-oriented domain classes.",
+      "No LLM filename judgment layer."
+    ],
+    "robert-workflow-principles": [
+      "Make the natural human action work.",
+      "Do not require Robert to understand naming conventions.",
+      "Let him type titles freely.",
+      "Automatically produce safe machine identifiers.",
+      "Lock machine names before file-producing work begins.",
+      "Keep actions tactile, obvious, and forgiving.",
+      "Use filesystem trash instead of destructive deletes.",
+      "Prefer immediate visible feedback."
+    ]
+  },
+  "open-questions-left": [
+    "Exact visual styling of crop rectangles is not specified.",
+    "Exact colors for crop rectangles are not specified.",
+    "Whether crop rectangles should have draggable adjustment handles is not part of v1.",
+    "Whether sound is implemented in v1 or v1.1 is left to implementation priority.",
+    "Whether WEBP should be accepted depends on local Pillow/Tkinter support."
+  ]
+}
