@@ -1,0 +1,13 @@
+{
+  "zookeep-project-guid": "72286004-0d1b-44e6-812e-0a48fe400c76",
+  "name": "aspect-slicer",
+  "repo-type": "python-2026-03",
+  "license": "CC0-1.0",
+  "repository": {
+    "name": "aspect-slicer",
+    "visibility": "public"
+  },
+  "python-package": {
+    "name": "aspect_slicer"
+  }
+}
