@@ -12,7 +12,7 @@ from aspect_slicer.core import (
     normalize_tags,
     read_core,
 )
-from aspect_slicer.imaging import default_centered_crop, import_image, make_drag_crop, slice_design
+from aspect_slicer.imaging import default_centered_crop, import_image, make_drag_crop, move_crop, resize_crop, slice_design
 
 
 def test_normalize_identifier_and_tags():
@@ -39,6 +39,22 @@ def test_drag_crop_does_not_aspect_quantize_top_left_anchor():
     assert crop[:2] == [23, 37]
     assert (crop[2] - crop[0]) % 17 == 0
     assert (crop[3] - crop[1]) % 22 == 0
+
+
+def test_move_crop_preserves_size_and_clamps_to_image():
+    assert move_crop([20, 30, 70, 90], 15, -10, 100, 100) == [35, 20, 85, 80]
+    assert move_crop([20, 30, 70, 90], 100, 100, 100, 100) == [50, 40, 100, 100]
+    assert move_crop([20, 30, 70, 90], -100, -100, 100, 100) == [0, 0, 50, 60]
+
+
+def test_resize_crop_corner_and_edge_preserve_ratio_and_bounds():
+    corner = resize_crop([20, 20, 64, 88], "se", 90, 140, 11, 17, 100, 150)
+    assert corner == [20, 20, 97, 139]
+    edge = resize_crop([20, 20, 64, 88], "e", 95, 80, 11, 17, 100, 150)
+    assert edge[0] == 20
+    assert edge[2] <= 100
+    assert (edge[2] - edge[0]) % 11 == 0
+    assert (edge[3] - edge[1]) % 17 == 0
 
 
 def test_project_create_import_slice_and_trash(tmp_path):

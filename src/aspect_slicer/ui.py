@@ -33,6 +33,8 @@ from .imaging import (
     get_managed_image_path,
     import_image,
     make_drag_crop,
+    move_crop,
+    resize_crop,
     slice_design,
     source_to_canvas,
 )
@@ -244,6 +246,7 @@ def open_design_window(design_uuid, focus_title=False):
         "photo": None,
         "image-item": None,
         "drag-anchor": None,
+        "drag-action": None,
         "vars": {},
         "controls": {},
     }
@@ -390,6 +393,10 @@ def build_design_canvas_panel(state):
         buttons.append(btn)
     state["mode-buttons"] = buttons
 
+    instruction = ttk.Label(right, text="", foreground="#555")
+    instruction.grid(row=2, column=0, pady=(8, 0), sticky="w")
+    state["canvas-instruction"] = instruction
+
 
 def load_design_into_window(state):
     design = get_window_design(state)
@@ -403,6 +410,7 @@ def load_design_into_window(state):
     state["series-box"].configure(values=sorted(series["name"] for series in g["data"]["series"].values()))
     build_name_widgets(state)
     update_design_controls(state)
+    update_canvas_instruction(state)
 
 
 def build_name_widgets(state):
@@ -570,7 +578,15 @@ def handle_slice(state):
 
 def set_crop_mode(state, mode):
     state["mode"] = mode
+    update_canvas_instruction(state)
     redraw_canvas(state)
+
+
+def update_canvas_instruction(state):
+    if state["mode"] == "all":
+        state["canvas-instruction"].configure(text="")
+    else:
+        state["canvas-instruction"].configure(text="Hold down shift while clicking, to create a new region.")
 
 
 def load_canvas_image(state):
@@ -605,6 +621,34 @@ def redraw_canvas(state):
             continue
         coords = source_to_canvas(crop, design["image-width"], design["image-height"])
         canvas.create_rectangle(*coords, outline=aspect["color"], width=3, tags=(aspect["crop-key"], "crop-rect"))
+        if state["mode"] != "all":
+            draw_crop_handles(canvas, coords, aspect["color"])
+
+
+def draw_crop_handles(canvas, coords, color):
+    x0, y0, x1, y1 = coords
+    points = {
+        "nw": (x0, y0),
+        "n": ((x0 + x1) / 2, y0),
+        "ne": (x1, y0),
+        "e": (x1, (y0 + y1) / 2),
+        "se": (x1, y1),
+        "s": ((x0 + x1) / 2, y1),
+        "sw": (x0, y1),
+        "w": (x0, (y0 + y1) / 2),
+    }
+    radius = 5
+    for handle, (x, y) in points.items():
+        canvas.create_rectangle(
+            x - radius,
+            y - radius,
+            x + radius,
+            y + radius,
+            fill="white",
+            outline=color,
+            width=2,
+            tags=("crop-handle", f"handle-{handle}"),
+        )
 
 
 def handle_canvas_press(state, event):
@@ -612,7 +656,23 @@ def handle_canvas_press(state, event):
     if state["mode"] == "all" or not design["name-locked"] or not design["image-file"]:
         return
     source_x, source_y = canvas_to_source(event.x, event.y, design["image-width"], design["image-height"])
-    state["drag-anchor"] = (source_x, source_y)
+    crop_key = get_crop_key(state["mode"])
+    crop = design[crop_key]
+    shift_is_down = bool(event.state & 0x0001)
+    if crop and not shift_is_down:
+        handle = hit_test_crop_handle(state, event.x, event.y, crop)
+        if handle:
+            state["drag-action"] = {"kind": "resize", "handle": handle, "original-crop": list(crop)}
+            play("crop-start")
+            return
+        if source_point_in_crop(source_x, source_y, crop):
+            state["drag-action"] = {"kind": "move", "start": (source_x, source_y), "original-crop": list(crop)}
+            play("crop-start")
+            return
+    if crop and shift_is_down and source_point_in_crop(source_x, source_y, crop):
+        design[crop_key] = None
+        redraw_canvas(state)
+    state["drag-action"] = {"kind": "new", "anchor": (source_x, source_y)}
     play("crop-start")
 
 
@@ -623,24 +683,42 @@ def handle_canvas_drag(state, event):
 def handle_canvas_release(state, event):
     update_drag_crop(state, event, save=True)
     state["drag-anchor"] = None
+    state["drag-action"] = None
 
 
 def update_drag_crop(state, event, save):
     design = get_window_design(state)
-    if not state["drag-anchor"] or state["mode"] == "all":
+    if not state["drag-action"] or state["mode"] == "all":
         return
     aspect = ASPECTS[state["mode"]]
     current_x, current_y = canvas_to_source(event.x, event.y, design["image-width"], design["image-height"])
-    crop = make_drag_crop(
-        state["drag-anchor"][0],
-        state["drag-anchor"][1],
-        current_x,
-        current_y,
-        aspect["ratio-width"],
-        aspect["ratio-height"],
-        design["image-width"],
-        design["image-height"],
-    )
+    action = state["drag-action"]
+    if action["kind"] == "new":
+        crop = make_drag_crop(
+            action["anchor"][0],
+            action["anchor"][1],
+            current_x,
+            current_y,
+            aspect["ratio-width"],
+            aspect["ratio-height"],
+            design["image-width"],
+            design["image-height"],
+        )
+    elif action["kind"] == "move":
+        delta_x = current_x - action["start"][0]
+        delta_y = current_y - action["start"][1]
+        crop = move_crop(action["original-crop"], delta_x, delta_y, design["image-width"], design["image-height"])
+    else:
+        crop = resize_crop(
+            action["original-crop"],
+            action["handle"],
+            current_x,
+            current_y,
+            aspect["ratio-width"],
+            aspect["ratio-height"],
+            design["image-width"],
+            design["image-height"],
+        )
     if not crop:
         return
     design[aspect["crop-key"]] = crop
@@ -648,6 +726,30 @@ def update_drag_crop(state, event, save):
     if save:
         save_now()
         play("crop-complete")
+
+
+def source_point_in_crop(source_x, source_y, crop):
+    x0, y0, x1, y1 = crop
+    return x0 <= source_x <= x1 and y0 <= source_y <= y1
+
+
+def hit_test_crop_handle(state, canvas_x, canvas_y, crop):
+    design = get_window_design(state)
+    x0, y0, x1, y1 = source_to_canvas(crop, design["image-width"], design["image-height"])
+    points = {
+        "nw": (x0, y0),
+        "n": ((x0 + x1) / 2, y0),
+        "ne": (x1, y0),
+        "e": (x1, (y0 + y1) / 2),
+        "se": (x1, y1),
+        "s": ((x0 + x1) / 2, y1),
+        "sw": (x0, y1),
+        "w": (x0, (y0 + y1) / 2),
+    }
+    for handle, (x, y) in points.items():
+        if abs(canvas_x - x) <= 7 and abs(canvas_y - y) <= 7:
+            return handle
+    return None
 
 
 def mark_dirty(state=None):
