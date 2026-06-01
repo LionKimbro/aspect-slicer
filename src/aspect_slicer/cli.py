@@ -17,7 +17,7 @@ def bool_ctx(key):
 
 
 def app_entry():
-    win = tk.Toplevel(harness.get_root())
+    win = tk.Toplevel(harness.g["root"])
     ui.start_in_root(win, app.ctx["execpath.root"], quit_fn=harness.quit)
 
 
