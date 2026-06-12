@@ -3,14 +3,19 @@ import json
 from PIL import Image
 
 from aspect_slicer.core import (
+    acquire_project_lock,
     create_design,
     design_has_slices,
     ensure_project,
+    get_lock_path,
+    get_design_snapshot_path,
     lock_design_name,
     move_design_to_trash,
     normalize_identifier,
     normalize_tags,
     read_core,
+    release_project_lock,
+    write_core,
 )
 from aspect_slicer.imaging import default_centered_crop, import_image, make_drag_crop, move_crop, resize_crop, slice_design
 
@@ -90,3 +95,82 @@ def test_project_create_import_slice_and_trash(tmp_path):
         snapshot = json.load(f)
     assert snapshot["name"] == "cool_print_7"
     assert design["uuid"] not in data["designs"]
+
+
+def test_write_core_writes_active_design_snapshot(tmp_path):
+    ensure_project(tmp_path)
+    data = read_core(tmp_path)
+    design = create_design(tmp_path, data)
+    ok, message = lock_design_name(data, design["uuid"], "Cool Print 7")
+    assert ok, message
+
+    write_core(tmp_path, data)
+
+    snapshot_path = get_design_snapshot_path(tmp_path, design["uuid"])
+    with snapshot_path.open("r", encoding="utf-8") as f:
+        snapshot = json.load(f)
+    assert snapshot["uuid"] == design["uuid"]
+    assert snapshot["name"] == "cool_print_7"
+
+
+def test_read_core_recovers_design_folder_missing_from_core_json(tmp_path):
+    ensure_project(tmp_path)
+    data = read_core(tmp_path)
+    design = create_design(tmp_path, data)
+    ok, message = lock_design_name(data, design["uuid"], "Lost Design")
+    assert ok, message
+    write_core(tmp_path, data)
+
+    core_path = tmp_path / ".aspect-slicer" / "core.json"
+    with core_path.open("r", encoding="utf-8") as f:
+        stale = json.load(f)
+    stale["designs"] = {}
+    with core_path.open("w", encoding="utf-8") as f:
+        json.dump(stale, f, indent=2)
+        f.write("\n")
+
+    recovered = read_core(tmp_path)
+
+    assert design["uuid"] in recovered["designs"]
+    assert recovered["designs"][design["uuid"]]["name"] == "lost_design"
+
+
+def test_write_core_merges_orphan_design_folder_before_saving(tmp_path):
+    ensure_project(tmp_path)
+    data = read_core(tmp_path)
+    design = create_design(tmp_path, data)
+    ok, message = lock_design_name(data, design["uuid"], "Late Design")
+    assert ok, message
+    write_core(tmp_path, data)
+
+    stale = {"config": {"audio": True}, "designs": {}, "series": {}}
+    write_core(tmp_path, stale)
+
+    saved = read_core(tmp_path)
+    assert design["uuid"] in saved["designs"]
+    assert saved["designs"][design["uuid"]]["name"] == "late_design"
+
+
+def test_project_lock_refuses_second_instance_and_releases_owner(tmp_path):
+    ok, message, lock = acquire_project_lock(tmp_path)
+    assert ok, message
+    assert get_lock_path(tmp_path).exists()
+
+    ok, message, second_lock = acquire_project_lock(tmp_path)
+    assert not ok
+    assert "already running" in message
+    assert second_lock is None
+
+    assert not release_project_lock(tmp_path, {"uuid": "wrong"})
+    assert get_lock_path(tmp_path).exists()
+    assert release_project_lock(tmp_path, lock)
+    assert not get_lock_path(tmp_path).exists()
+
+
+def test_project_lock_can_be_force_unlocked(tmp_path):
+    ok, message, lock = acquire_project_lock(tmp_path)
+    assert ok, message
+    assert lock
+
+    assert release_project_lock(tmp_path, force=True)
+    assert not get_lock_path(tmp_path).exists()

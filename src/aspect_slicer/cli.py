@@ -7,6 +7,7 @@ from tkintertester import harness
 from . import runtime_tests
 from . import ui
 from .constants import PROJECT_DIR
+from .core import get_lock_path, release_project_lock
 
 
 def bool_ctx(key):
@@ -32,6 +33,15 @@ def cmd_run():
     harness.run_host(app_entry, flags)
 
 
+def cmd_unlock():
+    execroot = Path(app.ctx["execpath.root"])
+    lock_path = get_lock_path(execroot)
+    if release_project_lock(execroot, force=True):
+        print(f"Deleted lock file: {lock_path}")
+    else:
+        print(f"No lock file found: {lock_path}")
+
+
 def main():
     app.declare_app("aspect-slicer", "0.1.0")
     app.describe_app("Exact-aspect image slicer for print workflows.")
@@ -48,6 +58,8 @@ def main():
     app.describe_cmd("", "Open the Aspect Slicer graphical application.")
     app.declare_cmd("run", cmd_run)
     app.describe_cmd("run", "Run the application, optionally with tkintertester tests.")
+    app.declare_cmd("unlock", cmd_unlock)
+    app.describe_cmd("unlock", "Delete a stale Aspect Slicer lock file for this project.")
     app.main()
 
 

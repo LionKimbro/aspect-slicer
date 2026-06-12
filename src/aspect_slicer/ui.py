@@ -8,12 +8,12 @@ from PIL import Image, ImageTk
 
 from .constants import ASPECTS, DISPLAY_IMAGE_HEIGHT, SUPPORTED_EXTENSIONS
 from .core import (
+    acquire_project_lock,
     create_design,
     create_series,
     design_display_name,
     design_has_slices,
     ensure_design_folders,
-    ensure_project,
     find_series_by_name,
     get_crop_key,
     get_design_path,
@@ -25,6 +25,7 @@ from .core import (
     normalize_identifier,
     normalize_tags,
     read_core,
+    release_project_lock,
     write_core,
 )
 from .imaging import (
@@ -47,6 +48,7 @@ g = {
     "data": None,
     "dirty": False,
     "autosave-after-id": None,
+    "lock": None,
     "sounds-enabled": True,
     "quit-fn": None,
 }
@@ -66,7 +68,18 @@ def start_in_root(root, execroot, flags="", quit_fn=None):
     g["execroot"] = Path(execroot)
     g["sounds-enabled"] = "q" not in flags
     g["quit-fn"] = quit_fn
-    ensure_project(g["execroot"])
+    ok, message, lock = acquire_project_lock(g["execroot"])
+    if not ok:
+        messagebox.showerror("Aspect Slicer", message)
+        try:
+            root.destroy()
+        except tk.TclError:
+            pass
+        if quit_fn:
+            quit_fn()
+        reset_ui_state()
+        return False
+    g["lock"] = lock
     g["data"] = read_core(g["execroot"])
     g["root"] = root
     root.title("Aspect Slicer")
@@ -76,6 +89,7 @@ def start_in_root(root, execroot, flags="", quit_fn=None):
     refresh_design_tree()
     play("program-start")
     schedule_autosave()
+    return True
 
 
 def reset_ui_state():
@@ -95,6 +109,7 @@ def reset_ui_state():
                 child.destroy()
             except tk.TclError:
                 pass
+    release_ui_lock()
     widgets.clear()
     design_windows.clear()
     g["execroot"] = None
@@ -102,8 +117,15 @@ def reset_ui_state():
     g["data"] = None
     g["dirty"] = False
     g["autosave-after-id"] = None
+    g["lock"] = None
     g["sounds-enabled"] = True
     g["quit-fn"] = None
+
+
+def release_ui_lock():
+    if g.get("execroot") and g.get("lock"):
+        release_project_lock(g["execroot"], g["lock"])
+    g["lock"] = None
 
 
 def play(event_name):
@@ -821,6 +843,7 @@ def close_master_window():
         root.destroy()
     except tk.TclError:
         pass
+    release_ui_lock()
     g["root"] = None
     if quit_fn:
         quit_fn()

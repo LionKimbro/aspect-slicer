@@ -1,5 +1,6 @@
 PROJECT_DIR = ".aspect-slicer"
 CORE_JSON = "core.json"
+LOCK_JSON = "lock.json"
 
 ASPECTS = {
     "8_5x11": {

@@ -10,6 +10,7 @@ from tkintertester import harness as harness_module
 
 from aspect_slicer import runtime_tests
 from aspect_slicer import ui
+from aspect_slicer.core import get_lock_path
 
 
 def reset_harness_state():
@@ -43,6 +44,7 @@ def run_registered_tests(tmp_path):
 
 def test_registered_gui_tests_with_tkintertester(tmp_path):
     run_registered_tests(tmp_path)
+    assert not get_lock_path(tmp_path).exists()
 
 
 def test_master_close_returns_from_normal_harness_runtime(tmp_path):
