@@ -17,7 +17,7 @@ from aspect_slicer.core import (
     release_project_lock,
     write_core,
 )
-from aspect_slicer.imaging import default_centered_crop, import_image, make_drag_crop, move_crop, resize_crop, slice_design
+from aspect_slicer.imaging import default_centered_crop, default_import_crop, import_image, make_drag_crop, move_crop, resize_crop, slice_design
 
 
 def test_normalize_identifier_and_tags():
@@ -31,6 +31,21 @@ def test_default_centered_crop_uses_integer_ratio_multiple():
     assert default_centered_crop(1696, 2528, 17, 22) == [6, 175, 1689, 2353]
     assert default_centered_crop(1696, 2528, 11, 17) == [34, 6, 1662, 2522]
     assert default_centered_crop(1696, 2528, 13, 19) == [3, 29, 1693, 2499]
+
+
+def test_default_import_crop_uses_near_standard_source_presets():
+    aspects = {
+        aspect["crop-key"]: aspect
+        for aspect in [
+            {"crop-key": "crop-8-5x11", "ratio-width": 17, "ratio-height": 22},
+            {"crop-key": "crop-11x17", "ratio-width": 11, "ratio-height": 17},
+            {"crop-key": "crop-13x19", "ratio-width": 13, "ratio-height": 19},
+        ]
+    }
+    assert default_import_crop(1694, 2526, aspects["crop-8-5x11"]) == [6, 175, 1689, 2353]
+    assert default_import_crop(1696, 2528, aspects["crop-11x17"]) == [48, 6, 1654, 2488]
+    assert default_import_crop(1698, 2530, aspects["crop-13x19"]) == [13, 43, 1677, 2475]
+    assert default_import_crop(1693, 2528, aspects["crop-11x17"]) == default_centered_crop(1693, 2528, 11, 17)
 
 
 def test_drag_crop_contains_current_point_and_clamps_to_bounds():
@@ -95,6 +110,20 @@ def test_project_create_import_slice_and_trash(tmp_path):
         snapshot = json.load(f)
     assert snapshot["name"] == "cool_print_7"
     assert design["uuid"] not in data["designs"]
+
+
+def test_import_image_uses_near_standard_source_presets(tmp_path):
+    ensure_project(tmp_path)
+    data = read_core(tmp_path)
+    design = create_design(tmp_path, data)
+    source = tmp_path / "source.png"
+    Image.new("RGB", (1696, 2528), (12, 34, 56)).save(source)
+
+    import_image(tmp_path, design, source)
+
+    assert design["crop-8-5x11"] == [6, 175, 1689, 2353]
+    assert design["crop-11x17"] == [48, 6, 1654, 2488]
+    assert design["crop-13x19"] == [13, 43, 1677, 2475]
 
 
 def test_write_core_writes_active_design_snapshot(tmp_path):

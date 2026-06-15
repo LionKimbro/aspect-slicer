@@ -14,6 +14,7 @@ def register_tests():
             step_create_design,
             step_title_proposes_name,
             step_lock_name_enables_import_guarded_controls,
+            step_design_debug_copy_and_button_labels,
             step_audio_checkbox_persists_to_core_json,
             step_search_filters_and_tree_sorts,
         ],
@@ -85,6 +86,40 @@ def step_lock_name_enables_import_guarded_controls():
     slice_state = str(state["controls"]["slice"].cget("state"))
     if slice_state != "disabled":
         return "fail", "slice should remain disabled until image import"
+    return "next", None
+
+
+def step_design_debug_copy_and_button_labels():
+    state = next(iter(ui.design_windows.values()))
+    if state["controls"]["browse"].cget("text") != "Choose Image":
+        return "fail", "browse button label was not updated"
+    if state["controls"]["containing"].cget("text") != "Containing Folder":
+        return "fail", "containing button label was not updated"
+    if state["controls"]["open"].cget("text") != "See Image":
+        return "fail", "open image button label was not updated"
+
+    if "copy-design-source" in state["controls"]:
+        return "fail", "copy design source should not be a visible button"
+    for i in range(5):
+        ui.handle_design_status_click(state)
+    copied = state["window"].clipboard_get()
+    design = ui.get_window_design(state)
+    if f'"uuid": "{design["uuid"]}"' not in copied:
+        return "fail", "five design status clicks did not copy the design JSON"
+    if state["status"].cget("text") != "Copied design source to clipboard":
+        return "fail", "copy design source did not update the status bar"
+    if "master-menu" in ui.widgets:
+        return "fail", "debug menu should not be visible on the master window"
+    for i in range(5):
+        ui.handle_master_status_click()
+    debug_window = ui.g.get("debug-window")
+    if not debug_window:
+        return "fail", "five status clicks did not open the debug window"
+    buttons = []
+    for child in debug_window.winfo_children():
+        buttons.extend(grandchild.cget("text") for grandchild in child.winfo_children() if hasattr(grandchild, "cget"))
+    if "Open Project Folder" not in buttons or "View Source" not in buttons:
+        return "fail", f"debug window buttons were {buttons!r}"
     return "next", None
 
 

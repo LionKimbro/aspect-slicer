@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import tkinter as tk
@@ -15,6 +16,7 @@ from .core import (
     design_has_slices,
     ensure_design_folders,
     find_series_by_name,
+    get_core_path,
     get_crop_key,
     get_design_path,
     get_project_path,
@@ -49,6 +51,9 @@ g = {
     "dirty": False,
     "autosave-after-id": None,
     "lock": None,
+    "debug-click-count": 0,
+    "debug-click-after-id": None,
+    "debug-window": None,
     "sounds-enabled": True,
     "quit-fn": None,
 }
@@ -105,7 +110,18 @@ def reset_ui_state():
             g["root"].after_cancel(g["autosave-after-id"])
         except tk.TclError:
             pass
+    if g.get("debug-click-after-id") and g.get("root"):
+        try:
+            g["root"].after_cancel(g["debug-click-after-id"])
+        except tk.TclError:
+            pass
+    if g.get("debug-window"):
+        try:
+            g["debug-window"].destroy()
+        except tk.TclError:
+            pass
     for item in list(design_windows.values()):
+        cancel_design_status_click_timer(item)
         try:
             item["window"].destroy()
         except tk.TclError:
@@ -125,6 +141,9 @@ def reset_ui_state():
     g["dirty"] = False
     g["autosave-after-id"] = None
     g["lock"] = None
+    g["debug-click-count"] = 0
+    g["debug-click-after-id"] = None
+    g["debug-window"] = None
     g["sounds-enabled"] = True
     g["quit-fn"] = None
 
@@ -199,7 +218,67 @@ def build_master_window(root):
 
     status = ttk.Label(frame, text="Saved", style="Status.TLabel", foreground="green")
     status.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+    status.bind("<Button-1>", handle_master_status_click)
     widgets["master-status"] = status
+
+
+def open_project_folder():
+    open_path(get_project_path(g["execroot"]))
+
+
+def view_core_json():
+    open_path(get_core_path(g["execroot"]))
+
+
+def handle_master_status_click(event=None):
+    if not g.get("root"):
+        return
+    if g.get("debug-click-after-id"):
+        try:
+            g["root"].after_cancel(g["debug-click-after-id"])
+        except tk.TclError:
+            pass
+    g["debug-click-count"] += 1
+    if g["debug-click-count"] >= 5:
+        reset_debug_clicks()
+        open_debug_window()
+        return
+    g["debug-click-after-id"] = g["root"].after(2000, reset_debug_clicks)
+
+
+def reset_debug_clicks():
+    g["debug-click-count"] = 0
+    g["debug-click-after-id"] = None
+
+
+def open_debug_window():
+    existing = g.get("debug-window")
+    if existing:
+        try:
+            existing.lift()
+            return
+        except tk.TclError:
+            g["debug-window"] = None
+    window = tk.Toplevel(g["root"])
+    window.title("Debug")
+    window.columnconfigure(0, weight=1)
+    window.rowconfigure(0, weight=1)
+    frame = ttk.Frame(window, padding=10)
+    frame.grid(row=0, column=0, sticky="nsew")
+    ttk.Button(frame, text="Open Project Folder", command=open_project_folder).grid(row=0, column=0, sticky="ew", pady=(0, 6))
+    ttk.Button(frame, text="View Source", command=view_core_json).grid(row=1, column=0, sticky="ew")
+    window.protocol("WM_DELETE_WINDOW", close_debug_window)
+    g["debug-window"] = window
+
+
+def close_debug_window():
+    window = g.get("debug-window")
+    if window:
+        try:
+            window.destroy()
+        except tk.TclError:
+            pass
+    g["debug-window"] = None
 
 
 def refresh_design_tree():
@@ -349,6 +428,8 @@ def open_design_window(design_uuid, focus_title=False):
         "image-item": None,
         "drag-anchor": None,
         "drag-action": None,
+        "status-click-count": 0,
+        "status-click-after-id": None,
         "vars": {},
         "controls": {},
     }
@@ -386,6 +467,7 @@ def build_design_window(state):
 
     status = ttk.Label(window, text="Saved", style="Status.TLabel", foreground="green")
     status.grid(row=1, column=0, columnspan=2, sticky="ew")
+    status.bind("<Button-1>", lambda event: handle_design_status_click(state))
     state["status"] = status
 
 
@@ -441,18 +523,18 @@ def build_design_left_panel(state):
 
     ttk.Separator(left).grid(row=5, column=0, columnspan=2, sticky="ew", pady=8)
 
-    ttk.Label(left, text="Source:").grid(row=6, column=0, sticky="w", pady=4)
+    ttk.Label(left, text="Image Source:").grid(row=6, column=0, sticky="w", pady=4)
     source = ttk.Label(left, text="", wraplength=310)
     source.grid(row=6, column=1, sticky="ew", pady=4)
     state["source-label"] = source
 
     button_row = ttk.Frame(left)
     button_row.grid(row=7, column=1, sticky="ew", pady=4)
-    browse = ttk.Button(button_row, text="Browse", command=lambda: handle_browse_image(state))
+    browse = ttk.Button(button_row, text="Choose Image", command=lambda: handle_browse_image(state))
     browse.grid(row=0, column=0, padx=(0, 6))
-    containing = ttk.Button(button_row, text="Containing", command=lambda: open_containing_folder(state))
+    containing = ttk.Button(button_row, text="Containing Folder", command=lambda: open_containing_folder(state))
     containing.grid(row=0, column=1, padx=(0, 6))
-    open_button = ttk.Button(button_row, text="Open", command=lambda: open_source_image(state))
+    open_button = ttk.Button(button_row, text="See Image", command=lambda: open_source_image(state))
     open_button.grid(row=0, column=2)
     state["controls"]["browse"] = browse
     state["controls"]["containing"] = containing
@@ -646,6 +728,42 @@ def open_path(path):
         os.startfile(path)
     else:
         subprocess.Popen(["xdg-open", str(path)])
+
+
+def copy_design_source(state):
+    design = get_window_design(state)
+    text = json.dumps(design, indent=2)
+    state["window"].clipboard_clear()
+    state["window"].clipboard_append(text)
+    state["status"].configure(text="Copied design source to clipboard", foreground="green")
+
+
+def handle_design_status_click(state):
+    if state.get("status-click-after-id"):
+        try:
+            state["window"].after_cancel(state["status-click-after-id"])
+        except tk.TclError:
+            pass
+    state["status-click-count"] += 1
+    if state["status-click-count"] >= 5:
+        reset_design_status_clicks(state)
+        copy_design_source(state)
+        return
+    state["status-click-after-id"] = state["window"].after(2000, lambda: reset_design_status_clicks(state))
+
+
+def reset_design_status_clicks(state):
+    state["status-click-count"] = 0
+    state["status-click-after-id"] = None
+
+
+def cancel_design_status_click_timer(state):
+    if state.get("status-click-after-id"):
+        try:
+            state["window"].after_cancel(state["status-click-after-id"])
+        except tk.TclError:
+            pass
+    reset_design_status_clicks(state)
 
 
 def open_containing_folder(state):
@@ -890,6 +1008,7 @@ def close_design_window(design_uuid):
     state = design_windows.get(design_uuid)
     if not state:
         return
+    cancel_design_status_click_timer(state)
     commit_design_fields(state)
     save_now()
     play("window-close")
@@ -903,6 +1022,7 @@ def close_master_window():
     for design_uuid in list(design_windows.keys()):
         state = design_windows.get(design_uuid)
         if state:
+            cancel_design_status_click_timer(state)
             commit_design_fields(state)
             try:
                 state["window"].destroy()

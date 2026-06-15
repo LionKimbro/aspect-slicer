@@ -9,6 +9,20 @@ from .constants import ASPECTS, DISPLAY_IMAGE_HEIGHT, SUPPORTED_EXTENSIONS
 from .core import ensure_design_folders, get_design_path, get_slices_path
 
 
+NEAR_STANDARD_SOURCE_SIZE = {
+    "width-min": 1694,
+    "width-max": 1698,
+    "height-min": 2526,
+    "height-max": 2530,
+}
+
+NEAR_STANDARD_SOURCE_CROPS = {
+    "crop-8-5x11": [6, 175, 1689, 2353],
+    "crop-11x17": [48, 6, 1654, 2488],
+    "crop-13x19": [13, 43, 1677, 2475],
+}
+
+
 def get_managed_image_path(execroot, design):
     if not design["image-file"]:
         return None
@@ -32,6 +46,25 @@ def default_centered_crop(image_width, image_height, ratio_width, ratio_height):
     x0 = (image_width - crop_width) // 2
     y0 = (image_height - crop_height) // 2
     return [x0, y0, x0 + crop_width, y0 + crop_height]
+
+
+def image_is_near_standard_source_size(image_width, image_height):
+    return (
+        NEAR_STANDARD_SOURCE_SIZE["width-min"] <= image_width <= NEAR_STANDARD_SOURCE_SIZE["width-max"]
+        and NEAR_STANDARD_SOURCE_SIZE["height-min"] <= image_height <= NEAR_STANDARD_SOURCE_SIZE["height-max"]
+    )
+
+
+def default_import_crop(image_width, image_height, aspect):
+    crop_key = aspect["crop-key"]
+    if image_is_near_standard_source_size(image_width, image_height):
+        return list(NEAR_STANDARD_SOURCE_CROPS[crop_key])
+    return default_centered_crop(
+        image_width,
+        image_height,
+        aspect["ratio-width"],
+        aspect["ratio-height"],
+    )
 
 
 def make_drag_crop(anchor_x, anchor_y, current_x, current_y, ratio_width, ratio_height, image_width, image_height):
@@ -200,12 +233,7 @@ def import_image(execroot, design, source_path):
     design["image-width"] = width
     design["image-height"] = height
     for aspect in ASPECTS.values():
-        design[aspect["crop-key"]] = default_centered_crop(
-            width,
-            height,
-            aspect["ratio-width"],
-            aspect["ratio-height"],
-        )
+        design[aspect["crop-key"]] = default_import_crop(width, height, aspect)
     return destination
 
 
