@@ -15,6 +15,7 @@ def register_tests():
             step_title_proposes_name,
             step_lock_name_enables_import_guarded_controls,
             step_audio_checkbox_persists_to_core_json,
+            step_search_filters_and_tree_sorts,
         ],
     )
 
@@ -95,6 +96,43 @@ def step_audio_checkbox_persists_to_core_json():
         data = json.load(f)
     if data["config"]["audio"] is not False:
         return "fail", "audio checkbox did not persist false to core.json"
+    return "next", None
+
+
+def step_search_filters_and_tree_sorts():
+    first = next(iter(ui.g["data"]["designs"].values()))
+    first["title"] = "Cool Print 7"
+    first["tags"] = ["print"]
+    series = ui.create_series(ui.g["data"], "Sumi")
+    second = ui.create_design(ui.g["execroot"], ui.g["data"])
+    second["name"] = "gengar_v2"
+    second["name-locked"] = True
+    second["title"] = "Gengar V2"
+    second["tags"] = ["ghost"]
+    second["series-uuid"] = series["uuid"]
+    third = ui.create_design(ui.g["execroot"], ui.g["data"])
+    third["name"] = "pikachu"
+    third["name-locked"] = True
+    third["title"] = "Electric Mouse"
+    third["tags"] = ["yellow"]
+    ui.refresh_design_tree()
+
+    ui.widgets["design-search-var"].set("sumi")
+    visible = ui.widgets["design-tree"].get_children()
+    if visible != (second["uuid"],):
+        return "fail", f"series search returned {visible!r}"
+
+    ui.widgets["design-search-var"].set("ghost")
+    visible = ui.widgets["design-tree"].get_children()
+    if visible != (second["uuid"],):
+        return "fail", f"tag search returned {visible!r}"
+
+    ui.widgets["design-search-var"].set("")
+    ui.set_design_tree_sort("title")
+    visible = ui.widgets["design-tree"].get_children()
+    expected = (first["uuid"], third["uuid"], second["uuid"])
+    if visible != expected:
+        return "fail", f"title sort returned {visible!r}, expected {expected!r}"
     return "success", None
 
 

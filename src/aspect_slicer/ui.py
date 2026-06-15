@@ -56,6 +56,13 @@ g = {
 widgets = {}
 design_windows = {}
 
+DESIGN_TREE_COLUMNS = [
+    ("name", "Name", 180),
+    ("title", "Title", 260),
+    ("series-name", "Series", 160),
+    ("created-date", "Created", 100),
+]
+
 
 def run(execroot):
     root = tk.Tk()
@@ -151,28 +158,36 @@ def build_master_window(root):
     frame = ttk.Frame(root, padding=10)
     frame.grid(row=0, column=0, sticky="nsew")
     frame.columnconfigure(0, weight=1)
-    frame.rowconfigure(0, weight=1)
+    frame.rowconfigure(1, weight=1)
 
-    columns = ("name", "title", "series-name", "created-date")
+    search_frame = ttk.Frame(frame)
+    search_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 8))
+    search_frame.columnconfigure(1, weight=1)
+    ttk.Label(search_frame, text="Search:").grid(row=0, column=0, sticky="w", padx=(0, 6))
+    search_var = tk.StringVar()
+    search_entry = ttk.Entry(search_frame, textvariable=search_var)
+    search_entry.grid(row=0, column=1, sticky="ew")
+    search_var.trace_add("write", lambda *args: refresh_design_tree())
+    widgets["design-search-var"] = search_var
+    widgets["design-search-entry"] = search_entry
+    widgets["design-sort-column"] = "created-date"
+    widgets["design-sort-reverse"] = False
+
+    columns = tuple(column for column, label, width in DESIGN_TREE_COLUMNS)
     tree = ttk.Treeview(frame, columns=columns, show="headings", selectmode="browse", height=16)
-    for column, label, width in [
-        ("name", "Name", 180),
-        ("title", "Title", 260),
-        ("series-name", "Series", 160),
-        ("created-date", "Created", 100),
-    ]:
-        tree.heading(column, text=label)
+    for column, label, width in DESIGN_TREE_COLUMNS:
+        tree.heading(column, text=label, command=lambda c=column: set_design_tree_sort(c))
         tree.column(column, width=width, anchor="w")
-    tree.grid(row=0, column=0, sticky="nsew")
+    tree.grid(row=1, column=0, sticky="nsew")
     tree.bind("<Double-1>", lambda event: open_selected_design())
     widgets["design-tree"] = tree
 
     scrollbar = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
-    scrollbar.grid(row=0, column=1, sticky="ns")
+    scrollbar.grid(row=1, column=1, sticky="ns")
     tree.configure(yscrollcommand=scrollbar.set)
 
     controls = ttk.Frame(frame)
-    controls.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+    controls.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(8, 0))
     controls.columnconfigure(4, weight=1)
     ttk.Button(controls, text="Create New Design", command=handle_create_design).grid(row=0, column=0, padx=(0, 6))
     ttk.Button(controls, text="Open", command=open_selected_design).grid(row=0, column=1, padx=(0, 6))
@@ -183,14 +198,16 @@ def build_master_window(root):
     ttk.Checkbutton(controls, text="audio", variable=audio_var, command=handle_audio_changed).grid(row=0, column=3, sticky="w")
 
     status = ttk.Label(frame, text="Saved", style="Status.TLabel", foreground="green")
-    status.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+    status.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(8, 0))
     widgets["master-status"] = status
 
 
 def refresh_design_tree():
     tree = widgets["design-tree"]
+    selection = tree.selection()
     tree.delete(*tree.get_children())
-    designs = sorted(g["data"]["designs"].values(), key=lambda d: (d["created-date"], d["title"], d["name"]))
+    update_design_tree_headings()
+    designs = get_visible_designs()
     for design in designs:
         tree.insert(
             "",
@@ -203,6 +220,69 @@ def refresh_design_tree():
                 design["created-date"],
             ),
         )
+    if selection and selection[0] in tree.get_children():
+        tree.selection_set(selection[0])
+
+
+def get_visible_designs():
+    designs = [design for design in g["data"]["designs"].values() if design_matches_search(design)]
+    sort_column = widgets.get("design-sort-column", "created-date")
+    sort_reverse = bool(widgets.get("design-sort-reverse", False))
+    return sorted(designs, key=lambda design: design_sort_key(design, sort_column), reverse=sort_reverse)
+
+
+def get_design_search_text():
+    search_var = widgets.get("design-search-var")
+    if not search_var:
+        return ""
+    return search_var.get().strip()
+
+
+def design_matches_search(design):
+    text = get_design_search_text()
+    if not text:
+        return True
+    text_lower = text.lower()
+    series = find_series_by_name(g["data"], text)
+    if series:
+        return design["series-uuid"] == series["uuid"]
+    fields = [
+        design_display_name(design),
+        design["title"],
+        get_series_name(g["data"], design["series-uuid"]),
+    ]
+    fields.extend(design["tags"])
+    return any(text_lower in field.lower() for field in fields)
+
+
+def design_sort_key(design, column):
+    series_name = get_series_name(g["data"], design["series-uuid"])
+    values = {
+        "name": design_display_name(design),
+        "title": design["title"],
+        "series-name": series_name,
+        "created-date": design["created-date"],
+    }
+    return (str(values.get(column, "")).lower(), design["created-date"], design["title"].lower(), design_display_name(design).lower())
+
+
+def set_design_tree_sort(column):
+    current = widgets.get("design-sort-column", "created-date")
+    if column == current:
+        widgets["design-sort-reverse"] = not bool(widgets.get("design-sort-reverse", False))
+    else:
+        widgets["design-sort-column"] = column
+        widgets["design-sort-reverse"] = False
+    refresh_design_tree()
+
+
+def update_design_tree_headings():
+    tree = widgets["design-tree"]
+    sort_column = widgets.get("design-sort-column", "created-date")
+    sort_reverse = bool(widgets.get("design-sort-reverse", False))
+    marker = " v" if sort_reverse else " ^"
+    for column, label, width in DESIGN_TREE_COLUMNS:
+        tree.heading(column, text=label + marker if column == sort_column else label, command=lambda c=column: set_design_tree_sort(c))
 
 
 def get_selected_design_uuid():
