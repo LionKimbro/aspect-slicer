@@ -32,8 +32,10 @@ from .core import (
 )
 from .imaging import (
     canvas_to_source,
+    get_crop_corner_pixels,
     get_display_size,
     get_managed_image_path,
+    get_transparent_crop_corners,
     import_image,
     make_drag_crop,
     move_crop,
@@ -66,6 +68,16 @@ DESIGN_TREE_COLUMNS = [
     ("title", "Title", 260),
     ("series-name", "Series", 160),
     ("created-date", "Created", 100),
+]
+
+CORNER_ZOOM_SOURCE_SIZE = 64
+CORNER_ZOOM_SCALE = 2
+CORNER_ZOOM_SIZE = CORNER_ZOOM_SOURCE_SIZE * CORNER_ZOOM_SCALE
+CORNER_ZOOM_NAMES = [
+    ("top-left", 0, 0),
+    ("top-right", 0, 1),
+    ("bottom-left", 1, 0),
+    ("bottom-right", 1, 1),
 ]
 
 
@@ -425,6 +437,8 @@ def open_design_window(design_uuid, focus_title=False):
         "window": window,
         "mode": "all",
         "photo": None,
+        "zoom-photos": {},
+        "crop-has-transparent-corner": False,
         "image-item": None,
         "drag-anchor": None,
         "drag-action": None,
@@ -436,6 +450,10 @@ def open_design_window(design_uuid, focus_title=False):
     design_windows[design_uuid] = state
     window.title(make_design_window_title(design))
     window.protocol("WM_DELETE_WINDOW", lambda: close_design_window(design_uuid))
+    window.bind("<Up>", lambda event: handle_design_nudge(state, 0, -1, event))
+    window.bind("<Down>", lambda event: handle_design_nudge(state, 0, 1, event))
+    window.bind("<Left>", lambda event: handle_design_nudge(state, -1, 0, event))
+    window.bind("<Right>", lambda event: handle_design_nudge(state, 1, 0, event))
     build_design_window(state)
     load_design_into_window(state)
     redraw_canvas(state)
@@ -557,6 +575,25 @@ def build_design_left_panel(state):
     message = ttk.Label(left, text="", wraplength=360)
     message.grid(row=11, column=0, columnspan=2, sticky="ew", pady=(8, 0))
     state["message-label"] = message
+
+    zoom_frame = ttk.Frame(left)
+    zoom_frame.grid(row=12, column=0, columnspan=2, sticky="w", pady=(12, 0))
+    zoom_canvases = {}
+    for name, row, column in CORNER_ZOOM_NAMES:
+        canvas = tk.Canvas(
+            zoom_frame,
+            width=CORNER_ZOOM_SIZE,
+            height=CORNER_ZOOM_SIZE,
+            background="#e6e6e6",
+            highlightthickness=5,
+            highlightbackground="#d9d9d9",
+            highlightcolor="#d9d9d9",
+        )
+        canvas.grid(row=row, column=column, padx=3, pady=3)
+        zoom_canvases[name] = canvas
+    zoom_frame.grid_remove()
+    state["zoom-frame"] = zoom_frame
+    state["zoom-canvases"] = zoom_canvases
 
 
 def build_design_canvas_panel(state):
@@ -832,6 +869,7 @@ def redraw_canvas(state):
     design = get_window_design(state)
     if not load_canvas_image(state):
         canvas.create_text(225, DISPLAY_IMAGE_HEIGHT // 2, text="No image loaded", fill="#555")
+        update_corner_zooms(state)
         return
     modes = ASPECTS.keys() if state["mode"] == "all" else [state["mode"]]
     for mode in modes:
@@ -843,6 +881,94 @@ def redraw_canvas(state):
         canvas.create_rectangle(*coords, outline=aspect["color"], width=3, tags=(aspect["crop-key"], "crop-rect"))
         if state["mode"] != "all":
             draw_crop_handles(canvas, coords, aspect["color"])
+    update_corner_zooms(state)
+
+
+def update_corner_zooms(state):
+    design = get_window_design(state)
+    if state["mode"] == "all" or not design["image-file"]:
+        hide_corner_zooms(state)
+        return
+    crop = design[get_crop_key(state["mode"])]
+    image_path = get_managed_image_path(g["execroot"], design)
+    if not crop or not image_path or not image_path.exists():
+        hide_corner_zooms(state)
+        return
+    with Image.open(image_path) as image:
+        rgba = image.convert("RGBA")
+    points = get_crop_corner_pixels(crop)
+    transparent = get_transparent_crop_corners(rgba, crop)
+    photos = {}
+    for name, row, column in CORNER_ZOOM_NAMES:
+        preview = make_corner_zoom_image(rgba, points[name])
+        photo = ImageTk.PhotoImage(preview)
+        canvas = state["zoom-canvases"][name]
+        canvas.delete("all")
+        canvas.create_image(0, 0, image=photo, anchor="nw")
+        draw_corner_target_reticle(canvas)
+        border_color = "#d12b2b" if transparent[name] else "#d9d9d9"
+        canvas.configure(highlightbackground=border_color, highlightcolor=border_color)
+        photos[name] = photo
+    state["zoom-photos"] = photos
+    state["crop-has-transparent-corner"] = any(transparent.values())
+    state["zoom-frame"].grid()
+
+
+def hide_corner_zooms(state):
+    state["crop-has-transparent-corner"] = False
+    state["zoom-photos"] = {}
+    state["zoom-frame"].grid_remove()
+
+
+def make_corner_zoom_image(image, point):
+    half = CORNER_ZOOM_SOURCE_SIZE // 2
+    source_x0 = point[0] - half
+    source_y0 = point[1] - half
+    source_x1 = source_x0 + CORNER_ZOOM_SOURCE_SIZE
+    source_y1 = source_y0 + CORNER_ZOOM_SOURCE_SIZE
+    clipped_x0 = max(0, source_x0)
+    clipped_y0 = max(0, source_y0)
+    clipped_x1 = min(image.width, source_x1)
+    clipped_y1 = min(image.height, source_y1)
+    preview = Image.new("RGBA", (CORNER_ZOOM_SOURCE_SIZE, CORNER_ZOOM_SOURCE_SIZE), (230, 230, 230, 255))
+    if clipped_x1 > clipped_x0 and clipped_y1 > clipped_y0:
+        region = image.crop((clipped_x0, clipped_y0, clipped_x1, clipped_y1))
+        preview.paste(region, (clipped_x0 - source_x0, clipped_y0 - source_y0))
+    return preview.resize((CORNER_ZOOM_SIZE, CORNER_ZOOM_SIZE), Image.Resampling.NEAREST)
+
+
+def draw_corner_target_reticle(canvas):
+    pixel_x0 = CORNER_ZOOM_SIZE // 2
+    pixel_y0 = CORNER_ZOOM_SIZE // 2
+    pixel_x1 = pixel_x0 + CORNER_ZOOM_SCALE
+    pixel_y1 = pixel_y0 + CORNER_ZOOM_SCALE
+    center_x = (pixel_x0 + pixel_x1) / 2
+    center_y = (pixel_y0 + pixel_y1) / 2
+    pixel_outline_gap = 1
+    pixel_box_x0 = pixel_x0 - pixel_outline_gap
+    pixel_box_y0 = pixel_y0 - pixel_outline_gap
+    pixel_box_x1 = pixel_x1 + pixel_outline_gap
+    pixel_box_y1 = pixel_y1 + pixel_outline_gap
+    margin = 5 * CORNER_ZOOM_SCALE
+    box_x0 = pixel_box_x0 - margin
+    box_y0 = pixel_box_y0 - margin
+    box_x1 = pixel_box_x1 + margin
+    box_y1 = pixel_box_y1 + margin
+    color = "#d12b2b"
+    canvas.create_rectangle(box_x0, box_y0, box_x1, box_y1, outline=color, width=1, tags=("corner-reticle",))
+    canvas.create_line(0, center_y, box_x0, center_y, fill=color, width=1, tags=("corner-reticle",))
+    canvas.create_line(box_x1, center_y, CORNER_ZOOM_SIZE, center_y, fill=color, width=1, tags=("corner-reticle",))
+    canvas.create_line(center_x, 0, center_x, box_y0, fill=color, width=1, tags=("corner-reticle",))
+    canvas.create_line(center_x, box_y1, center_x, CORNER_ZOOM_SIZE, fill=color, width=1, tags=("corner-reticle",))
+    canvas.create_rectangle(
+        pixel_box_x0,
+        pixel_box_y0,
+        pixel_box_x1,
+        pixel_box_y1,
+        outline=color,
+        width=1,
+        tags=("corner-reticle",),
+    )
 
 
 def draw_crop_handles(canvas, coords, color):
@@ -875,6 +1001,7 @@ def handle_canvas_press(state, event):
     design = get_window_design(state)
     if state["mode"] == "all" or not design["name-locked"] or not design["image-file"]:
         return
+    state["canvas"].focus_set()
     source_x, source_y = canvas_to_source(event.x, event.y, design["image-width"], design["image-height"])
     crop_key = get_crop_key(state["mode"])
     crop = design[crop_key]
@@ -945,6 +1072,36 @@ def update_drag_crop(state, event, save):
     redraw_canvas(state)
     if save:
         save_now()
+        play_crop_adjustment_feedback(state)
+
+
+def handle_design_nudge(state, delta_x, delta_y, event=None):
+    if state["mode"] == "all":
+        return None
+    focus = state["window"].focus_get()
+    if focus and focus.winfo_class() in {"Entry", "TEntry", "Text", "TCombobox"}:
+        return None
+    design = get_window_design(state)
+    if not design["name-locked"] or not design["image-file"]:
+        return None
+    crop_key = get_crop_key(state["mode"])
+    crop = design[crop_key]
+    if not crop:
+        return None
+    moved = move_crop(crop, delta_x, delta_y, design["image-width"], design["image-height"])
+    if moved == crop:
+        return "break"
+    design[crop_key] = moved
+    redraw_canvas(state)
+    save_now()
+    play_crop_adjustment_feedback(state, play_success=False)
+    return "break"
+
+
+def play_crop_adjustment_feedback(state, play_success=True):
+    if state.get("crop-has-transparent-corner"):
+        play("crop-error")
+    elif play_success:
         play("crop-complete")
 
 

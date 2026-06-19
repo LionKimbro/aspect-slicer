@@ -17,7 +17,17 @@ from aspect_slicer.core import (
     release_project_lock,
     write_core,
 )
-from aspect_slicer.imaging import default_centered_crop, default_import_crop, import_image, make_drag_crop, move_crop, resize_crop, slice_design
+from aspect_slicer.imaging import (
+    default_centered_crop,
+    default_import_crop,
+    get_crop_corner_pixels,
+    get_transparent_crop_corners,
+    import_image,
+    make_drag_crop,
+    move_crop,
+    resize_crop,
+    slice_design,
+)
 
 
 def test_normalize_identifier_and_tags():
@@ -65,6 +75,25 @@ def test_move_crop_preserves_size_and_clamps_to_image():
     assert move_crop([20, 30, 70, 90], 15, -10, 100, 100) == [35, 20, 85, 80]
     assert move_crop([20, 30, 70, 90], 100, 100, 100, 100) == [50, 40, 100, 100]
     assert move_crop([20, 30, 70, 90], -100, -100, 100, 100) == [0, 0, 50, 60]
+
+
+def test_crop_corner_pixels_and_transparency_use_included_pixels():
+    image = Image.new("RGBA", (10, 10), (1, 2, 3, 255))
+    image.putpixel((8, 8), (1, 2, 3, 0))
+    crop = [2, 3, 9, 9]
+
+    assert get_crop_corner_pixels(crop) == {
+        "top-left": (2, 3),
+        "top-right": (8, 3),
+        "bottom-left": (2, 8),
+        "bottom-right": (8, 8),
+    }
+    assert get_transparent_crop_corners(image, crop) == {
+        "top-left": False,
+        "top-right": False,
+        "bottom-left": False,
+        "bottom-right": True,
+    }
 
 
 def test_resize_crop_corner_and_edge_preserve_ratio_and_bounds():

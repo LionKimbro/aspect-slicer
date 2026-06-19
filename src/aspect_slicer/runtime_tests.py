@@ -1,5 +1,6 @@
 import json
 
+from PIL import Image
 from tkintertester import harness
 
 from . import ui
@@ -15,6 +16,7 @@ def register_tests():
             step_title_proposes_name,
             step_lock_name_enables_import_guarded_controls,
             step_design_debug_copy_and_button_labels,
+            step_corner_zooms_and_arrow_nudge,
             step_audio_checkbox_persists_to_core_json,
             step_search_filters_and_tree_sorts,
         ],
@@ -120,6 +122,44 @@ def step_design_debug_copy_and_button_labels():
         buttons.extend(grandchild.cget("text") for grandchild in child.winfo_children() if hasattr(grandchild, "cget"))
     if "Open Project Folder" not in buttons or "View Source" not in buttons:
         return "fail", f"debug window buttons were {buttons!r}"
+    return "next", None
+
+
+def step_corner_zooms_and_arrow_nudge():
+    state = next(iter(ui.design_windows.values()))
+    design = ui.get_window_design(state)
+    source = ui.g["execroot"] / "alpha-test.png"
+    image = Image.new("RGBA", (100, 100), (0, 0, 0, 0))
+    for y in range(10, 90):
+        for x in range(10, 90):
+            image.putpixel((x, y), (12, 34, 56, 255))
+    image.save(source)
+    ui.import_image(ui.g["execroot"], design, source)
+    design["crop-11x17"] = [10, 10, 90, 90]
+    ui.load_design_into_window(state)
+    ui.set_crop_mode(state, "11x17")
+
+    if not state["zoom-frame"].grid_info():
+        return "fail", "corner zoom frame was not shown in a single crop mode"
+    if any(not canvas.find_all() for canvas in state["zoom-canvases"].values()):
+        return "fail", "one or more corner zoom canvases were empty"
+    if any(int(canvas.cget("width")) != 128 or int(canvas.cget("height")) != 128 for canvas in state["zoom-canvases"].values()):
+        return "fail", "corner zoom canvases were not doubled to 128 by 128"
+    if any(len(canvas.find_withtag("corner-reticle")) != 6 for canvas in state["zoom-canvases"].values()):
+        return "fail", "one or more corner zoom canvases were missing the targeting reticle"
+    if state["crop-has-transparent-corner"]:
+        return "fail", "opaque crop corners were marked transparent"
+
+    state["canvas"].focus_set()
+    result = ui.handle_design_nudge(state, -1, 0)
+    if result != "break":
+        return "fail", "arrow nudge was not handled"
+    if design["crop-11x17"] != [9, 10, 89, 90]:
+        return "fail", f"arrow nudge produced {design['crop-11x17']!r}"
+    if not state["crop-has-transparent-corner"]:
+        return "fail", "transparent crop corners were not detected after nudge"
+    if state["zoom-canvases"]["top-left"].cget("highlightbackground") != "#d12b2b":
+        return "fail", "transparent corner zoom did not receive a red border"
     return "next", None
 
 

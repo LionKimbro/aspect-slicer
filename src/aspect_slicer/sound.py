@@ -13,6 +13,7 @@ PATTERNS = {
     "open-design": [("tone", 620, 80)],
     "crop-start": [("tone", 420, 70), ("gap", 0, 50), ("tone", 420, 70), ("gap", 0, 50), ("tone", 420, 70)],
     "crop-complete": [("tone", 880, 70), ("gap", 0, 50), ("tone", 1040, 70)],
+    "crop-error": [("tone", 240, 90), ("gap", 0, 30), ("tone", 160, 140)],
     "delete-design": [("tone", 260, 30), ("gap", 0, 20), ("tone", 240, 30), ("gap", 0, 20), ("tone", 220, 30), ("gap", 0, 20), ("tone", 200, 40)],
     "window-close": [("tone", 560, 70), ("gap", 0, 50), ("tone", 760, 100)],
 }

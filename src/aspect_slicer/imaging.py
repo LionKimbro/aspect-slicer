@@ -101,6 +101,24 @@ def move_crop(crop, delta_x, delta_y, image_width, image_height):
     return [new_x0, new_y0, new_x0 + width, new_y0 + height]
 
 
+def get_crop_corner_pixels(crop):
+    x0, y0, x1, y1 = crop
+    return {
+        "top-left": (x0, y0),
+        "top-right": (x1 - 1, y0),
+        "bottom-left": (x0, y1 - 1),
+        "bottom-right": (x1 - 1, y1 - 1),
+    }
+
+
+def get_transparent_crop_corners(image, crop):
+    rgba = image if image.mode == "RGBA" else image.convert("RGBA")
+    return {
+        name: rgba.getpixel(point)[3] < 255
+        for name, point in get_crop_corner_pixels(crop).items()
+    }
+
+
 def resize_crop(crop, handle, current_x, current_y, ratio_width, ratio_height, image_width, image_height):
     current_x = max(0, min(int(current_x), image_width))
     current_y = max(0, min(int(current_y), image_height))
