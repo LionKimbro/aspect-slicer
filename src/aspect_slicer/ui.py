@@ -521,6 +521,7 @@ def build_design_left_panel(state):
     tags_entry.grid(row=3, column=1, sticky="ew", pady=4)
     tags_entry.bind("<FocusOut>", lambda event: commit_design_fields(state))
     tags_entry.bind("<Return>", lambda event: commit_design_fields(state))
+    tags_entry.bind("<KeyRelease>", lambda event: update_note_warning(state))
     state["vars"]["tags"] = tags_var
 
     ttk.Label(left, text="Series:").grid(row=4, column=0, sticky="w", pady=4)
@@ -539,15 +540,30 @@ def build_design_left_panel(state):
     state["series-box"] = series_box
     state["controls"]["create-series"] = create_series_btn
 
-    ttk.Separator(left).grid(row=5, column=0, columnspan=2, sticky="ew", pady=8)
+    note_border = tk.Frame(left, highlightthickness=0, highlightbackground="#d12b2b")
+    note_border.grid(row=5, column=0, columnspan=2, sticky="ew", pady=4)
+    note_border.columnconfigure(0, weight=1)
+    note_frame = ttk.Frame(note_border)
+    note_frame.grid(row=0, column=0, sticky="ew")
+    note_frame.columnconfigure(1, weight=1)
+    ttk.Label(note_frame, text="Note:").grid(row=0, column=0, sticky="w", padx=(0, 6))
+    note_var = tk.StringVar()
+    note_entry = ttk.Entry(note_frame, textvariable=note_var, width=34)
+    note_entry.grid(row=0, column=1, sticky="ew")
+    note_entry.bind("<FocusOut>", lambda event: commit_design_fields(state))
+    note_entry.bind("<Return>", lambda event: commit_design_fields(state))
+    state["vars"]["note"] = note_var
+    state["note-border"] = note_border
 
-    ttk.Label(left, text="Image Source:").grid(row=6, column=0, sticky="w", pady=4)
+    ttk.Separator(left).grid(row=6, column=0, columnspan=2, sticky="ew", pady=8)
+
+    ttk.Label(left, text="Image Source:").grid(row=7, column=0, sticky="w", pady=4)
     source = ttk.Label(left, text="", wraplength=310)
-    source.grid(row=6, column=1, sticky="ew", pady=4)
+    source.grid(row=7, column=1, sticky="ew", pady=4)
     state["source-label"] = source
 
     button_row = ttk.Frame(left)
-    button_row.grid(row=7, column=1, sticky="ew", pady=4)
+    button_row.grid(row=8, column=1, sticky="ew", pady=4)
     browse = ttk.Button(button_row, text="Choose Image", command=lambda: handle_browse_image(state))
     browse.grid(row=0, column=0, padx=(0, 6))
     containing = ttk.Button(button_row, text="Containing Folder", command=lambda: open_containing_folder(state))
@@ -558,26 +574,29 @@ def build_design_left_panel(state):
     state["controls"]["containing"] = containing
     state["controls"]["open"] = open_button
 
-    ttk.Label(left, text="Image Hash:").grid(row=8, column=0, sticky="w", pady=4)
+    ttk.Label(left, text="Image Hash:").grid(row=9, column=0, sticky="w", pady=4)
     image_hash = ttk.Label(left, text="not loaded yet", wraplength=310)
-    image_hash.grid(row=8, column=1, sticky="ew", pady=4)
+    image_hash.grid(row=9, column=1, sticky="ew", pady=4)
     state["hash-label"] = image_hash
 
-    ttk.Separator(left).grid(row=9, column=0, columnspan=2, sticky="ew", pady=8)
+    ttk.Separator(left).grid(row=10, column=0, columnspan=2, sticky="ew", pady=8)
 
     slice_button = ttk.Button(left, text="Slice", command=lambda: handle_slice(state))
-    slice_button.grid(row=10, column=0, sticky="ew", pady=4)
+    slice_button.grid(row=11, column=0, sticky="ew", pady=4)
     view_button = ttk.Button(left, text="View Slices", command=lambda: open_slices_folder(state))
-    view_button.grid(row=10, column=1, sticky="ew", padx=(6, 0), pady=4)
+    view_button.grid(row=11, column=1, sticky="ew", padx=(6, 0), pady=4)
     state["controls"]["slice"] = slice_button
     state["controls"]["view-slices"] = view_button
 
     message = ttk.Label(left, text="", wraplength=360)
-    message.grid(row=11, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+    message.grid(row=12, column=0, columnspan=2, sticky="ew", pady=(8, 0))
     state["message-label"] = message
 
-    zoom_frame = ttk.Frame(left)
-    zoom_frame.grid(row=12, column=0, columnspan=2, sticky="w", pady=(12, 0))
+    zoom_container = ttk.Frame(left)
+    zoom_container.grid(row=13, column=0, columnspan=2, sticky="ew", pady=(12, 0))
+    zoom_container.columnconfigure(0, weight=1)
+    zoom_frame = ttk.Frame(zoom_container)
+    zoom_frame.grid(row=0, column=0)
     zoom_canvases = {}
     for name, row, column in CORNER_ZOOM_NAMES:
         canvas = tk.Canvas(
@@ -591,8 +610,8 @@ def build_design_left_panel(state):
         )
         canvas.grid(row=row, column=column, padx=3, pady=3)
         zoom_canvases[name] = canvas
-    zoom_frame.grid_remove()
-    state["zoom-frame"] = zoom_frame
+    zoom_container.grid_remove()
+    state["zoom-frame"] = zoom_container
     state["zoom-canvases"] = zoom_canvases
 
 
@@ -625,11 +644,13 @@ def load_design_into_window(state):
     state["vars"]["title"].set(design["title"])
     state["vars"]["tags"].set(" ".join(design["tags"]))
     state["vars"]["series"].set(get_series_name(g["data"], design["series-uuid"]))
+    state["vars"]["note"].set(design["note"])
     state["created-label"].configure(text=design["created-date"])
     state["source-label"].configure(text=design["source-file-path"] or "not loaded yet")
     state["hash-label"].configure(text=design["image-hash"] or "not loaded yet")
     state["series-box"].configure(values=sorted(series["name"] for series in g["data"]["series"].values()))
     build_name_widgets(state)
+    update_note_warning(state)
     update_design_controls(state)
     update_canvas_instruction(state)
 
@@ -702,7 +723,9 @@ def commit_design_fields(state):
     design = get_window_design(state)
     design["title"] = state["vars"]["title"].get()
     design["tags"] = normalize_tags(state["vars"]["tags"].get())
+    design["note"] = state["vars"]["note"].get()
     state["vars"]["tags"].set(" ".join(design["tags"]))
+    update_note_warning(state)
     if not design["name-locked"] and "name" in state["vars"]:
         design["name"] = normalize_identifier(state["vars"]["name"].get())
         state["vars"]["name"].set(design["name"])
@@ -714,6 +737,11 @@ def commit_design_fields(state):
     refresh_design_tree()
     update_design_controls(state)
     mark_dirty(state)
+
+
+def update_note_warning(state):
+    tags = normalize_tags(state["vars"]["tags"].get())
+    state["note-border"].configure(highlightthickness=4 if "bad" in tags else 0)
 
 
 def handle_create_series(state):

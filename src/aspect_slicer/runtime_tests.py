@@ -99,6 +99,20 @@ def step_design_debug_copy_and_button_labels():
         return "fail", "containing button label was not updated"
     if state["controls"]["open"].cget("text") != "See Image":
         return "fail", "open image button label was not updated"
+    state["vars"]["note"].set("One-line debugging note")
+    ui.commit_design_fields(state)
+    if ui.get_window_design(state)["note"] != "One-line debugging note":
+        return "fail", "note entry did not commit to the design"
+    state["vars"]["tags"].set("print bad")
+    ui.update_note_warning(state)
+    if int(state["note-border"].cget("highlightthickness")) != 4:
+        return "fail", "bad tag did not add the note warning border"
+    if state["note-border"].cget("highlightbackground") != "#d12b2b":
+        return "fail", "note warning border was not red"
+    state["vars"]["tags"].set("print")
+    ui.update_note_warning(state)
+    if int(state["note-border"].cget("highlightthickness")) != 0:
+        return "fail", "removing bad tag did not clear the note warning border"
 
     if "copy-design-source" in state["controls"]:
         return "fail", "copy design source should not be a visible button"

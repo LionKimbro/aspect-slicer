@@ -171,6 +171,22 @@ def test_write_core_writes_active_design_snapshot(tmp_path):
     assert snapshot["name"] == "cool_print_7"
 
 
+def test_missing_design_note_normalizes_to_blank_and_is_saved(tmp_path):
+    ensure_project(tmp_path)
+    data = read_core(tmp_path)
+    design = create_design(tmp_path, data)
+    del design["note"]
+    write_core(tmp_path, data)
+
+    loaded = read_core(tmp_path)
+    loaded_design = loaded["designs"][design["uuid"]]
+    assert loaded_design["note"] == ""
+
+    with (tmp_path / ".aspect-slicer" / "core.json").open("r", encoding="utf-8") as f:
+        saved = json.load(f)
+    assert saved["designs"][design["uuid"]]["note"] == ""
+
+
 def test_read_core_recovers_design_folder_missing_from_core_json(tmp_path):
     ensure_project(tmp_path)
     data = read_core(tmp_path)

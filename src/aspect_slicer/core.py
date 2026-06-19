@@ -190,6 +190,7 @@ def make_design():
         "title": "",
         "tags": [],
         "series-uuid": "",
+        "note": "",
         "created-date": today_string(),
         "source-file-path": "",
         "image-file": "",
