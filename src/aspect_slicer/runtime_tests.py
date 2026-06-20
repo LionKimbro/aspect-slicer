@@ -222,6 +222,20 @@ def step_search_filters_and_tree_sorts():
     expected = (first["uuid"], third["uuid"], second["uuid"])
     if visible != expected:
         return "fail", f"title sort returned {visible!r}, expected {expected!r}"
+
+    ui.widgets["design-search-var"].set("frame")
+    design_uuids_before = set(ui.g["data"]["designs"])
+    ui.handle_create_design()
+    created_uuids = set(ui.g["data"]["designs"]) - design_uuids_before
+    if ui.widgets["design-search-var"].get() != "frame":
+        return "fail", "creating a design changed the active search filter"
+    if len(created_uuids) != 1:
+        return "fail", "creating a filtered design did not add exactly one design"
+    created_uuid = created_uuids.pop()
+    if ui.get_selected_design_uuid() is not None:
+        return "fail", "filtered-out new design should not be selected"
+    if created_uuid not in ui.design_windows:
+        return "fail", "filtered-out new design window did not open"
     return "success", None
 
 

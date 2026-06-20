@@ -387,7 +387,9 @@ def handle_create_design():
     design = create_design(g["execroot"], g["data"])
     mark_saved()
     refresh_design_tree()
-    widgets["design-tree"].selection_set(design["uuid"])
+    tree = widgets["design-tree"]
+    if tree.exists(design["uuid"]):
+        tree.selection_set(design["uuid"])
     open_design_window(design["uuid"], focus_title=True)
 
 
