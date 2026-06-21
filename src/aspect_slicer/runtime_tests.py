@@ -197,7 +197,7 @@ def step_search_filters_and_tree_sorts():
     second["name"] = "gengar_v2"
     second["name-locked"] = True
     second["title"] = "Gengar V2"
-    second["tags"] = ["ghost"]
+    second["tags"] = ["ghost", "bad"]
     second["series-uuid"] = series["uuid"]
     third = ui.create_design(ui.g["execroot"], ui.g["data"])
     third["name"] = "pikachu"
@@ -205,6 +205,10 @@ def step_search_filters_and_tree_sorts():
     third["title"] = "Electric Mouse"
     third["tags"] = ["yellow"]
     ui.refresh_design_tree()
+    if ui.widgets["design-tree"].item(second["uuid"], "tags") != ("bad-design",):
+        return "fail", "bad design row did not receive the red tree tag"
+    if ui.widgets["design-tree"].item(first["uuid"], "tags"):
+        return "fail", "ordinary design row received the bad tree tag"
 
     ui.widgets["design-search-var"].set("sumi")
     visible = ui.widgets["design-tree"].get_children()

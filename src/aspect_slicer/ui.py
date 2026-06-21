@@ -211,6 +211,7 @@ def build_master_window(root):
         tree.column(column, width=width, anchor="w")
     tree.grid(row=1, column=0, sticky="nsew")
     tree.bind("<Double-1>", lambda event: open_selected_design())
+    tree.tag_configure("bad-design", foreground="#d12b2b")
     widgets["design-tree"] = tree
 
     scrollbar = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
@@ -304,6 +305,7 @@ def refresh_design_tree():
             "",
             "end",
             iid=design["uuid"],
+            tags=("bad-design",) if "bad" in design["tags"] else (),
             values=(
                 design_display_name(design),
                 design["title"],
